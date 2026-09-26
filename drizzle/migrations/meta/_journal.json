@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790441386522,
+      "tag": "0000_edusync_core_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790441434562,
+      "tag": "0001_edusync_rls_grants_realtime",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790441518187,
+      "tag": "0002_seed_demo_school_function",
+      "breakpoints": true
+    }
+  ]
+}
