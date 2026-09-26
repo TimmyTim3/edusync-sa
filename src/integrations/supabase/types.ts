@@ -1290,6 +1290,7 @@ export type Database = {
         Args: { _school: string; _student: string }
         Returns: boolean
       }
+      clear_demo_data: { Args: never; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1303,6 +1304,10 @@ export type Database = {
       is_school_member: { Args: { _school: string }; Returns: boolean }
       is_school_staff: { Args: { _school: string }; Returns: boolean }
       my_student_ids: { Args: never; Returns: string[] }
+      seed_demo_school: {
+        Args: { p_name?: string; p_size?: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "school_admin" | "teacher" | "parent" | "student"
