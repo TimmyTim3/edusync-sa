@@ -22,6 +22,13 @@
       "when": 1790441518187,
       "tag": "0002_seed_demo_school_function",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790469853026,
+      "tag": "0003_seed_allow_service_role",
+      "breakpoints": true
     }
   ]
 }
