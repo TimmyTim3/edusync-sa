@@ -56,12 +56,12 @@ function AuthPage() {
       options: { emailRedirectTo: `${window.location.origin}/app`, data: { full_name: name } },
     });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     if (data.user && !data.session) toast.success("Check your inbox to verify your email.");
   };
 
   const magic = async () => {
-    if (!email) return toast.error("Enter your email first");
+    if (!email) { toast.error("Enter your email first"); return; }
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: { emailRedirectTo: `${window.location.origin}/app`, shouldCreateUser: false },
@@ -71,7 +71,7 @@ function AuthPage() {
   };
 
   const reset = async () => {
-    if (!email) return toast.error("Enter your email first");
+    if (!email) { toast.error("Enter your email first"); return; }
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/app`,
     });
