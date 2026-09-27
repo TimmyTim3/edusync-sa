@@ -1,15 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
 
 const PLATFORM_ADMIN_EMAIL = "timmytim691@gmail.com";
+const DEMO_DOMAIN = "demo-edusync.school";
 
-type Credential = { role: string; label: string; email: string; password: string };
+export type Credential = { role: string; label: string; email: string; password: string };
+export type SeedSummary = Record<string, string | number>;
 
 function randomPassword() {
   return "Demo#" + Math.random().toString(36).slice(2, 8) + "2026";
 }
 
-async function assertPlatformAdmin(claims: Record<string, unknown>) {
+function assertPlatformAdmin(claims: Record<string, unknown>) {
   const email = String(claims["email"] ?? "").toLowerCase();
   if (email !== PLATFORM_ADMIN_EMAIL) {
     throw new Error("Access restricted to authorised platform administrator only");
@@ -20,9 +23,12 @@ async function assertPlatformAdmin(claims: Record<string, unknown>) {
 /** Seeds a full demo school (database generation + real demo logins). */
 export const seedDemoSchool = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { size: "small" | "large"; name?: string }) => input)
+  .inputValidator((input: { size: "small" | "large"; name?: string }) => ({
+    size: input.size === "small" ? ("small" as const) : ("large" as const),
+    name: input.name?.slice(0, 120),
+  }))
   .handler(async ({ data, context }) => {
-    const email = await assertPlatformAdmin(context.claims as Record<string, unknown>);
+    const email = assertPlatformAdmin(context.claims as Record<string, unknown>);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: job } = await supabaseAdmin
@@ -34,19 +40,33 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
     try {
       const { data: summary, error } = await supabaseAdmin.rpc("seed_demo_school", {
         p_size: data.size,
-        p_name: data.name ?? null,
+        ...(data.name ? { p_name: data.name } : {}),
       });
       if (error) throw new Error(error.message);
 
-      const result = summary as Record<string, unknown>;
+      const result = summary as SeedSummary;
       const schoolId = String(result["school_id"]);
-      const stamp = Math.random().toString(36).slice(2, 6);
-      const domain = `demo${stamp}.edusync.school`;
+      // Small schools get a sub-domain so the main demo logins stay on the big school.
+      const domain = data.size === "large" ? DEMO_DOMAIN : `small.${DEMO_DOMAIN}`;
       const credentials: Credential[] = [];
+
+      // Collect existing auth users on the demo domain so re-seeding re-uses the same emails.
+      const existing = new Map<string, string>();
+      for (let page = 1; page <= 10; page++) {
+        const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+        for (const u of list?.users ?? []) if (u.email) existing.set(u.email.toLowerCase(), u.id);
+        if (!list || list.users.length < 1000) break;
+      }
 
       const makeUser = async (localPart: string, fullName: string) => {
         const pwd = randomPassword();
         const userEmail = `${localPart}@${domain}`;
+        const old = existing.get(userEmail);
+        if (old) {
+          await supabaseAdmin.from("user_roles").delete().eq("user_id", old);
+          await supabaseAdmin.from("parents").update({ user_id: null }).eq("user_id", old);
+          await supabaseAdmin.auth.admin.deleteUser(old);
+        }
         const { data: created, error: err } = await supabaseAdmin.auth.admin.createUser({
           email: userEmail,
           password: pwd,
@@ -67,7 +87,6 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
         await supabaseAdmin.from("user_roles").insert({ user_id: u.id, school_id: schoolId, role });
       };
 
-      // Principal
       const principal = await makeUser("principal", "Dr Nomsa Khumalo");
       await linkUser(principal, "school_admin");
       credentials.push({
@@ -77,12 +96,12 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
         password: principal.password,
       });
 
-      // Teachers (assigned to real classes)
       const { data: classes } = await supabaseAdmin
         .from("classes")
         .select("id, name")
         .eq("school_id", schoolId)
-        .limit(6);
+        .order("name")
+        .limit(4);
       const { data: subjects } = await supabaseAdmin
         .from("subjects")
         .select("id, name")
@@ -98,6 +117,13 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
         await linkUser(t, "teacher");
         const subject = (subjects ?? []).find((s) => s.name === spec.subject) ?? (subjects ?? [])[0];
         if (subject && classes?.length) {
+          for (const c of classes) {
+            await supabaseAdmin
+              .from("class_subject_teachers")
+              .delete()
+              .eq("class_id", c.id)
+              .eq("subject_id", subject.id);
+          }
           await supabaseAdmin.from("class_subject_teachers").insert(
             classes.map((c) => ({
               school_id: schoolId,
@@ -115,16 +141,15 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
         });
       }
 
-      // Parents: prefer ones with most children
       const { data: links } = await supabaseAdmin
         .from("parent_student")
         .select("parent_id")
         .eq("school_id", schoolId)
-        .limit(4000);
+        .limit(5000);
       const counts = new Map<string, number>();
       for (const l of links ?? []) counts.set(l.parent_id, (counts.get(l.parent_id) ?? 0) + 1);
       const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-      const multi = sorted.filter(([, n]) => n >= 2).slice(0, 7);
+      const multi = sorted.filter(([, n]) => n >= 2 && n <= 4).slice(0, 7);
       const single = sorted.filter(([, n]) => n === 1).slice(0, 3);
       const chosen = [...multi, ...single];
 
@@ -138,10 +163,7 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
         const name = parentRow?.full_name ?? `Parent ${i}`;
         const p = await makeUser(`parent${i}`, name);
         await linkUser(p, "parent");
-        await supabaseAdmin
-          .from("parents")
-          .update({ user_id: p.id, email: p.email })
-          .eq("id", parentId);
+        await supabaseAdmin.from("parents").update({ user_id: p.id, email: p.email }).eq("id", parentId);
         credentials.push({
           role: `Parent — ${childCount} ${childCount === 1 ? "child" : "children"}`,
           label: name,
@@ -156,8 +178,8 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
         .update({
           status: "complete",
           school_id: schoolId,
-          summary: result,
-          credentials,
+          summary: result as Json,
+          credentials: credentials as unknown as Json,
           finished_at: new Date().toISOString(),
         })
         .eq("id", job?.id ?? "");
@@ -166,7 +188,7 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
         actor_email: email,
         school_id: schoolId,
         action: "seed_demo_school",
-        details: result,
+        details: result as Json,
       });
 
       return { summary: result, credentials, schoolId };
@@ -183,42 +205,45 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
 export const clearDemoData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const email = await assertPlatformAdmin(context.claims as Record<string, unknown>);
+    const email = assertPlatformAdmin(context.claims as Record<string, unknown>);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: demoSchools } = await supabaseAdmin.from("schools").select("id").eq("is_demo", true);
     const ids = (demoSchools ?? []).map((s) => s.id);
     if (ids.length) {
-      const { data: profiles } = await supabaseAdmin.from("profiles").select("id").in("school_id", ids);
-      for (const p of profiles ?? []) {
-        await supabaseAdmin.auth.admin.deleteUser(p.id).catch(() => undefined);
+      const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id").in("school_id", ids);
+      const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const authIds = new Set((list?.users ?? []).map((u) => u.id));
+      for (const r of roles ?? []) {
+        if (authIds.has(r.user_id)) await supabaseAdmin.auth.admin.deleteUser(r.user_id);
       }
+      await supabaseAdmin.from("seed_jobs").delete().in("school_id", ids);
       await supabaseAdmin.from("schools").delete().in("id", ids);
     }
-    await supabaseAdmin.from("seed_jobs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     await supabaseAdmin
       .from("audit_logs")
       .insert({ actor_email: email, action: "clear_demo_data", details: { schools: ids.length } });
     return { removed: ids.length };
   });
 
+type CountTable = "schools" | "students" | "parents" | "attendance_records" | "marks" | "notices" | "profiles";
+
 export const platformStats = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertPlatformAdmin(context.claims as Record<string, unknown>);
+    assertPlatformAdmin(context.claims as Record<string, unknown>);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const count = async (table: string) => {
-      const { count: c } = await supabaseAdmin
-        .from(table)
-        .select("*", { count: "exact", head: true });
+    const count = async (table: CountTable) => {
+      const { count: c } = await supabaseAdmin.from(table).select("id", { count: "exact", head: true });
       return c ?? 0;
     };
-    const [schools, students, parents, attendance, marks, notices] = await Promise.all([
+    const [schools, students, parents, attendance, marks, notices, staff] = await Promise.all([
       count("schools"),
       count("students"),
       count("parents"),
       count("attendance_records"),
       count("marks"),
       count("notices"),
+      count("profiles"),
     ]);
-    return { schools, students, parents, attendance, marks, notices };
+    return { schools, students, parents, attendance, marks, notices, staff };
   });
