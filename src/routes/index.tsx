@@ -59,7 +59,7 @@ function Landing() {
         </Link>
         <nav className="flex items-center gap-2">
           <Button asChild variant="ghost">
-            <Link to="/auth">Sign in</Link>
+            <Link to="/auth" search={{ mode: undefined }}>Sign in</Link>
           </Button>
           <Button asChild>
             <Link to="/auth" search={{ mode: "signup" }}>Start free trial</Link>

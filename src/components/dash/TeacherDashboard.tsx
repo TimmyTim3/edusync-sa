@@ -55,7 +55,7 @@ export function TeacherDashboard() {
       school_id: schoolId, student_id: s.id, class_id: cur.class_id, date: today(), status: marks[s.id] ?? ("present" as Status), marked_by: user!.id,
     }));
     const { error } = await supabase.from("attendance_records").upsert(rows, { onConflict: "student_id,date" });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success(`Attendance saved for ${rows.length} learners — parents updated`);
     void qc.invalidateQueries({ queryKey: ["class-students"] });
   };
@@ -64,7 +64,7 @@ export function TeacherDashboard() {
   const addHomework = async () => {
     if (!cur || !schoolId || !hw.title) return;
     const { error } = await supabase.from("homework").insert({ school_id: schoolId, class_id: cur.class_id, subject_id: cur.subject_id, title: hw.title, description: hw.desc, due_date: hw.due, created_by: user!.id });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Homework posted");
     setHw({ title: "", due: today(), desc: "" });
   };
@@ -73,7 +73,7 @@ export function TeacherDashboard() {
   const postNotice = async () => {
     if (!cur || !schoolId || !notice.title) return;
     const { error } = await supabase.from("notices").insert({ school_id: schoolId, scope: "class", class_id: cur.class_id, title: notice.title, body: notice.body, created_by: user!.id });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Class notice sent");
     setNotice({ title: "", body: "" });
   };
@@ -81,13 +81,13 @@ export function TeacherDashboard() {
   const [assess, setAssess] = useState("");
   const [scores, setScores] = useState<Record<string, string>>({});
   const publishMarks = async () => {
-    if (!cur || !schoolId || !assess) return toast.error("Enter an assessment title");
+    if (!cur || !schoolId || !assess) { toast.error("Enter an assessment title"); return; }
     const { data: a, error } = await supabase.from("assessments").insert({ school_id: schoolId, class_id: cur.class_id, subject_id: cur.subject_id, title: assess, type: "test", max_marks: 100, date: today(), published: true, created_by: user!.id }).select("id").single();
-    if (error || !a) return toast.error(error?.message ?? "Failed");
+    if (error || !a) { toast.error(error?.message ?? "Failed"); return; }
     const rows = Object.entries(scores).filter(([, v]) => v !== "").map(([sid, v]) => ({ school_id: schoolId, assessment_id: a.id, student_id: sid, score: Number(v) }));
     if (rows.length) {
       const { error: e2 } = await supabase.from("marks").insert(rows);
-      if (e2) return toast.error(e2.message);
+      if (e2) { toast.error(e2.message); return; }
     }
     toast.success(`Published ${rows.length} marks`);
     setAssess(""); setScores({});
@@ -97,7 +97,7 @@ export function TeacherDashboard() {
   const addBehaviour = async () => {
     if (!schoolId || !beh.student || !beh.note) return;
     const { error } = await supabase.from("behaviour_notes").insert({ school_id: schoolId, student_id: beh.student, category: beh.positive ? "Merit" : "Concern", is_positive: beh.positive, severity: "low", note: beh.note, points: beh.positive ? 5 : -5, parent_visible: true, created_by: user!.id });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Behaviour note shared");
     setBeh({ student: "", note: "", positive: true });
   };

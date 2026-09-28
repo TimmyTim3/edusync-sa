@@ -45,7 +45,7 @@ export function PrincipalDashboard() {
   const post = async () => {
     if (!schoolId || !n.title) return;
     const { error } = await supabase.from("notices").insert({ school_id: schoolId, scope: "school", title: n.title, body: n.body, priority: n.urgent ? "urgent" : "normal", created_by: user!.id });
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Notice sent to every family");
     setN({ title: "", body: "", urgent: false });
   };
