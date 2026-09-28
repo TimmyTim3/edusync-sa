@@ -1,0 +1,106 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
+import { useSchoolRealtime } from "@/lib/realtime";
+import { Shell, Card, Stat, today } from "./Shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
+export function PrincipalDashboard() {
+  const { user, schoolId } = useAuth();
+  const lastUpdate = useSchoolRealtime(schoolId);
+
+  const stats = useQuery({
+    queryKey: ["principal-stats", schoolId],
+    enabled: !!schoolId,
+    queryFn: async () => {
+      const c = (q: PromiseLike<{ count: number | null }>) => Promise.resolve(q).then((r) => r.count ?? 0);
+      const sid = schoolId!;
+      // most recent date with attendance
+      const { data: last } = await supabase.from("attendance_records").select("date").eq("school_id", sid).order("date", { ascending: false }).limit(1);
+      const day = last?.[0]?.date ?? today();
+      const [school, students, parents, teachers, marked, present, positive, negative] = await Promise.all([
+        supabase.from("schools").select("name").eq("id", sid).single(),
+        c(supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", sid)),
+        c(supabase.from("parents").select("id", { count: "exact", head: true }).eq("school_id", sid)),
+        c(supabase.from("user_roles").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("role", "teacher")),
+        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day)),
+        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day).in("status", ["present", "late"])),
+        c(supabase.from("behaviour_notes").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("is_positive", true)),
+        c(supabase.from("behaviour_notes").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("is_positive", false)),
+      ]);
+      const { data: classes } = await supabase.from("classes").select("id, name, grade").eq("school_id", sid).order("grade").order("name");
+      const { data: absent } = await supabase
+        .from("attendance_records").select("status, students(first_name, last_name), classes(name)")
+        .eq("school_id", sid).eq("date", day).eq("status", "absent").limit(15);
+      const { data: notices } = await supabase.from("notices").select("id, title, scope, published_at").eq("school_id", sid).order("published_at", { ascending: false }).limit(8);
+      return { name: school.data?.name ?? "School", day, students, parents, teachers, marked, present, positive, negative, classes: classes ?? [], absent: (absent ?? []) as unknown as { students: { first_name: string; last_name: string } | null; classes: { name: string } | null }[], notices: notices ?? [] };
+    },
+  });
+
+  const [n, setN] = useState({ title: "", body: "", urgent: false });
+  const post = async () => {
+    if (!schoolId || !n.title) return;
+    const { error } = await supabase.from("notices").insert({ school_id: schoolId, scope: "school", title: n.title, body: n.body, priority: n.urgent ? "urgent" : "normal", created_by: user!.id });
+    if (error) return toast.error(error.message);
+    toast.success("Notice sent to every family");
+    setN({ title: "", body: "", urgent: false });
+  };
+
+  const s = stats.data;
+  const rate = s && s.marked ? Math.round((s.present / s.marked) * 100) : 0;
+  const grades = s ? [...new Set(s.classes.map((c) => c.grade))] : [];
+
+  return (
+    <Shell title={s?.name ?? "School overview"} subtitle="Principal dashboard" lastUpdate={lastUpdate}>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Stat label="Learners" value={s?.students.toLocaleString() ?? "…"} />
+        <Stat label="Parents" value={s?.parents.toLocaleString() ?? "…"} />
+        <Stat label="Teachers" value={s?.teachers ?? "…"} />
+        <Stat label="Attendance" value={`${rate}%`} hint={s ? `${s.present}/${s.marked} on ${s.day}` : ""} />
+        <Stat label="Behaviour" value={s ? `+${s.positive} / −${s.negative}` : "…"} hint="merits / concerns" />
+      </div>
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <Card title="Classes by grade" className="lg:col-span-2">
+          <div className="space-y-3">
+            {grades.map((g) => (
+              <div key={g}>
+                <p className="mb-1 text-xs font-medium text-muted-foreground">Grade {g}</p>
+                <div className="flex flex-wrap gap-1">
+                  {s!.classes.filter((c) => c.grade === g).map((c) => (
+                    <span key={c.id} className="rounded-md bg-secondary px-2 py-1 text-xs text-secondary-foreground">{c.name.replace("Grade ", "")}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card title="School-wide notice">
+          <div className="space-y-2">
+            <Input placeholder="Title" value={n.title} onChange={(e) => setN({ ...n, title: e.target.value })} />
+            <Textarea placeholder="Message to all parents" value={n.body} onChange={(e) => setN({ ...n, body: e.target.value })} />
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={n.urgent} onChange={(e) => setN({ ...n, urgent: e.target.checked })} /> Urgent</label>
+            <Button className="w-full" onClick={post}>Publish</Button>
+          </div>
+        </Card>
+        <Card title={`Absent on ${s?.day ?? ""}`}>
+          <ul className="space-y-1 text-sm">
+            {(s?.absent ?? []).map((a, i) => (
+              <li key={i} className="flex justify-between"><span>{a.students?.first_name} {a.students?.last_name}</span><span className="text-muted-foreground">{a.classes?.name}</span></li>
+            ))}
+          </ul>
+        </Card>
+        <Card title="Recent notices" className="lg:col-span-2">
+          <ul className="divide-y text-sm">
+            {(s?.notices ?? []).map((x) => (
+              <li key={x.id} className="flex justify-between py-2"><span>{x.title}</span><span className="text-muted-foreground">{x.scope} · {new Date(x.published_at).toLocaleDateString()}</span></li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+    </Shell>
+  );
+}
