@@ -95,7 +95,7 @@ function Master() {
       const result = await seed({ data: { size } });
       setCredentials(result.credentials);
       setSummary(result.summary);
-      done(`${result.summary.students} learners created`);
+      done(`${result.summary["students"]} learners created`);
     } catch (error) { fail(error); }
     finally { setBusy(false); }
   };
