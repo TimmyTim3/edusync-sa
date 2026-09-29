@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/lib/auth";
 import { useSchoolRealtime } from "@/lib/realtime";
+import { useFeatureFlags } from "@/lib/features";
 import { Shell, Card, Stat, Empty, today } from "./Shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,8 @@ export function TeacherDashboard() {
   const { user, schoolId } = useAuth();
   const lastUpdate = useSchoolRealtime(schoolId);
   const qc = useQueryClient();
+  const { data: flags } = useFeatureFlags(schoolId);
+  const on = (key: string) => flags?.resolved[key] ?? false;
 
   const assigns = useQuery({
     queryKey: ["assigns", user?.id],
@@ -50,7 +53,7 @@ export function TeacherDashboard() {
   }, [students.data]);
 
   const saveAttendance = async () => {
-    if (!cur || !schoolId) return;
+    if (!cur || !schoolId || !on("attendance")) return;
     const rows = (students.data?.students ?? []).map((s) => ({
       school_id: schoolId, student_id: s.id, class_id: cur.class_id, date: today(), status: marks[s.id] ?? ("present" as Status), marked_by: user!.id,
     }));
@@ -62,7 +65,7 @@ export function TeacherDashboard() {
 
   const [hw, setHw] = useState({ title: "", due: today(), desc: "" });
   const addHomework = async () => {
-    if (!cur || !schoolId || !hw.title) return;
+    if (!cur || !schoolId || !hw.title || !on("homework")) return;
     const { error } = await supabase.from("homework").insert({ school_id: schoolId, class_id: cur.class_id, subject_id: cur.subject_id, title: hw.title, description: hw.desc, due_date: hw.due, created_by: user!.id });
     if (error) { toast.error(error.message); return; }
     toast.success("Homework posted");
@@ -71,7 +74,7 @@ export function TeacherDashboard() {
 
   const [notice, setNotice] = useState({ title: "", body: "" });
   const postNotice = async () => {
-    if (!cur || !schoolId || !notice.title) return;
+    if (!cur || !schoolId || !notice.title || !on("notices")) return;
     const { error } = await supabase.from("notices").insert({ school_id: schoolId, scope: "class", class_id: cur.class_id, title: notice.title, body: notice.body, created_by: user!.id });
     if (error) { toast.error(error.message); return; }
     toast.success("Class notice sent");
@@ -81,6 +84,7 @@ export function TeacherDashboard() {
   const [assess, setAssess] = useState("");
   const [scores, setScores] = useState<Record<string, string>>({});
   const publishMarks = async () => {
+    if (!on("marks")) return;
     if (!cur || !schoolId || !assess) { toast.error("Enter an assessment title"); return; }
     const { data: a, error } = await supabase.from("assessments").insert({ school_id: schoolId, class_id: cur.class_id, subject_id: cur.subject_id, title: assess, type: "test", max_marks: 100, date: today(), published: true, created_by: user!.id }).select("id").single();
     if (error || !a) { toast.error(error?.message ?? "Failed"); return; }
@@ -95,7 +99,7 @@ export function TeacherDashboard() {
 
   const [beh, setBeh] = useState({ student: "", note: "", positive: true });
   const addBehaviour = async () => {
-    if (!schoolId || !beh.student || !beh.note) return;
+    if (!schoolId || !beh.student || !beh.note || !on("behaviour")) return;
     const { error } = await supabase.from("behaviour_notes").insert({ school_id: schoolId, student_id: beh.student, category: beh.positive ? "Merit" : "Concern", is_positive: beh.positive, severity: "low", note: beh.note, points: beh.positive ? 5 : -5, parent_visible: true, created_by: user!.id });
     if (error) { toast.error(error.message); return; }
     toast.success("Behaviour note shared");
@@ -119,16 +123,16 @@ export function TeacherDashboard() {
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Learners" value={st.length} />
-        <Stat label="Present (today)" value={present} />
-        <Stat label="Marked today" value={students.data?.att.length ? "Yes" : "No"} />
+        {on("attendance") && <Stat label="Present (today)" value={present} />}
+        {on("attendance") && <Stat label="Marked today" value={students.data?.att.length ? "Yes" : "No"} />}
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <Card title="Attendance & marks" className="lg:col-span-2">
+        {(on("attendance") || on("marks")) && <Card title="Attendance & marks" className="lg:col-span-2">
           <div className="mb-3 flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => setMarks(Object.fromEntries(st.map((s) => [s.id, "present" as Status])))}>All present</Button>
-            <Button size="sm" onClick={saveAttendance}>Save attendance</Button>
-            <Input className="h-9 w-48" placeholder="New assessment title" value={assess} onChange={(e) => setAssess(e.target.value)} />
-            <Button size="sm" variant="secondary" onClick={publishMarks}>Publish marks</Button>
+            {on("attendance") && <Button size="sm" variant="outline" onClick={() => setMarks(Object.fromEntries(st.map((s) => [s.id, "present" as Status])))}>All present</Button>}
+            {on("attendance") && <Button size="sm" onClick={saveAttendance}>Save attendance</Button>}
+            {on("marks") && <Input className="h-9 w-48" placeholder="New assessment title" value={assess} onChange={(e) => setAssess(e.target.value)} />}
+            {on("marks") && <Button size="sm" variant="secondary" onClick={publishMarks}>Publish marks</Button>}
           </div>
           <div className="max-h-[520px] overflow-auto">
             <table className="w-full text-sm">
@@ -136,49 +140,49 @@ export function TeacherDashboard() {
                 {st.map((s) => (
                   <tr key={s.id} className="border-b">
                     <td className="py-1.5">{s.last_name}, {s.first_name} <span className="text-xs text-muted-foreground">{s.admission_no}</span></td>
-                    <td className="whitespace-nowrap">
+                     {on("attendance") && <td className="whitespace-nowrap">
                       {STATUSES.map((x) => (
-                        <button key={x} onClick={() => setMarks({ ...marks, [s.id]: x })}
-                          className={`mr-1 rounded px-2 py-0.5 text-xs capitalize ${(marks[s.id] ?? "present") === x ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{x[0]}</button>
+                         <Button key={x} size="sm" variant={(marks[s.id] ?? "present") === x ? "default" : "ghost"} title={x} aria-label={`${s.first_name} ${s.last_name}: ${x}`} onClick={() => setMarks({ ...marks, [s.id]: x })}
+                           className="mr-1 h-7 w-7 p-0 uppercase">{x[0]}</Button>
                       ))}
-                    </td>
-                    <td className="w-20"><Input className="h-7" type="number" min={0} max={100} placeholder="%" value={scores[s.id] ?? ""} onChange={(e) => setScores({ ...scores, [s.id]: e.target.value })} /></td>
+                     </td>}
+                     {on("marks") && <td className="w-20"><Input className="h-7" type="number" min={0} max={100} placeholder="%" value={scores[s.id] ?? ""} onChange={(e) => setScores({ ...scores, [s.id]: e.target.value })} /></td>}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </Card>
+        </Card>}
         <div className="space-y-4">
-          <Card title="Set homework">
+          {on("homework") && <Card title="Set homework">
             <div className="space-y-2">
               <Input placeholder="Title" value={hw.title} onChange={(e) => setHw({ ...hw, title: e.target.value })} />
               <Input type="date" value={hw.due} onChange={(e) => setHw({ ...hw, due: e.target.value })} />
               <Textarea placeholder="Instructions" value={hw.desc} onChange={(e) => setHw({ ...hw, desc: e.target.value })} />
               <Button className="w-full" onClick={addHomework}>Post homework</Button>
             </div>
-          </Card>
-          <Card title="Behaviour note">
+          </Card>}
+          {on("behaviour") && <Card title="Behaviour note">
             <div className="space-y-2">
               <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={beh.student} onChange={(e) => setBeh({ ...beh, student: e.target.value })}>
                 <option value="">Choose learner…</option>
                 {st.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
               </select>
               <div className="flex gap-2">
-                <Button size="sm" variant={beh.positive ? "default" : "outline"} onClick={() => setBeh({ ...beh, positive: true })}>Merit</Button>
-                <Button size="sm" variant={!beh.positive ? "destructive" : "outline"} onClick={() => setBeh({ ...beh, positive: false })}>Concern</Button>
+                <Button size="sm" variant={beh.positive ? "default" : "outline"} className={beh.positive ? "bg-success text-success-foreground hover:bg-success/90" : ""} onClick={() => setBeh({ ...beh, positive: true })}>Merit +5</Button>
+                <Button size="sm" variant={!beh.positive ? "destructive" : "outline"} onClick={() => setBeh({ ...beh, positive: false })}>Concern −5</Button>
               </div>
               <Textarea placeholder="Note visible to parents" value={beh.note} onChange={(e) => setBeh({ ...beh, note: e.target.value })} />
               <Button className="w-full" onClick={addBehaviour}>Share with parents</Button>
             </div>
-          </Card>
-          <Card title="Class notice">
+          </Card>}
+          {on("notices") && <Card title="Class notice">
             <div className="space-y-2">
               <Input placeholder="Title" value={notice.title} onChange={(e) => setNotice({ ...notice, title: e.target.value })} />
               <Textarea placeholder="Message" value={notice.body} onChange={(e) => setNotice({ ...notice, body: e.target.value })} />
               <Button className="w-full" onClick={postNotice}>Send notice</Button>
             </div>
-          </Card>
+          </Card>}
         </div>
       </div>
     </Shell>
