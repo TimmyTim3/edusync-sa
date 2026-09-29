@@ -6,6 +6,7 @@ import { useFeatureFlags } from "@/lib/features";
 import { useSchoolRealtime } from "@/lib/realtime";
 import { Shell, Card, Stat, Empty, today } from "./Shell";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 type Child = { id: string; first_name: string; last_name: string; admission_no: string; photo_url: string | null; class_id: string | null; classes: { name: string } | null };
 
@@ -21,7 +22,7 @@ export function ParentDashboard() {
   const { user, schoolId } = useAuth();
   const lastUpdate = useSchoolRealtime(schoolId);
   const { data: ff } = useFeatureFlags(schoolId);
-  const on = (k: string) => ff?.resolved[k] ?? true;
+  const on = (k: string) => ff?.resolved[k] ?? false;
 
   const children = useQuery({
     queryKey: ["children", user?.id],
@@ -80,18 +81,20 @@ export function ParentDashboard() {
     <Shell title="Family dashboard" subtitle={`${kids.length} ${kids.length === 1 ? "child" : "children"} linked`} lastUpdate={lastUpdate}>
       <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
         {kids.map((k) => (
-          <button
+          <Button
             key={k.id}
+            variant={k.id === child?.id ? "default" : "outline"}
+            size="sm"
             onClick={() => setSel(k.id)}
-            className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${k.id === child?.id ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}
+            className="shrink-0 gap-2"
           >
             {k.photo_url && <img src={k.photo_url} alt="" className="h-6 w-6 rounded-full" />}
             {k.first_name} · {k.classes?.name}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Today" value={todayRec ? todayRec.status.replace("_", " ") : "Not marked"} />
+        {on("attendance") && <Stat label="Today" value={todayRec ? todayRec.status.replace("_", " ") : "Not marked"} />}
         {on("attendance") && <Stat label="Attendance" value={`${pct}%`} hint="last 60 school days" />}
         {on("marks") && <Stat label="Average mark" value={`${avg}%`} hint={`${marks.length} results`} />}
         {on("homework") && <Stat label="Homework due" value={upcoming.length} hint={`${overdue.length} past due`} />}
@@ -146,8 +149,8 @@ export function ParentDashboard() {
             {d?.beh.length ? (
               <ul className="space-y-2 text-sm">
                 {d.beh.map((b) => (
-                  <li key={b.id} className="rounded-lg border p-2">
-                    <span className={b.is_positive ? "text-primary" : "text-destructive"}>{b.is_positive ? "+" : ""}{b.points} · {b.category}</span>
+                   <li key={b.id} className={`rounded-md border-l-4 p-3 ${b.is_positive ? "border-success bg-success/10" : "border-destructive bg-destructive/10"}`}>
+                     <span className={`font-semibold ${b.is_positive ? "text-success" : "text-destructive"}`}>{b.is_positive ? "+" : "−"}{Math.abs(b.points)} · {b.category}</span>
                     <p className="text-muted-foreground">{b.note}</p>
                   </li>
                 ))}

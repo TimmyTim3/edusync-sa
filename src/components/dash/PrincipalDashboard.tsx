@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useSchoolRealtime } from "@/lib/realtime";
+import { useFeatureFlags } from "@/lib/features";
 import { Shell, Card, Stat, today } from "./Shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,13 +13,16 @@ import { Textarea } from "@/components/ui/textarea";
 export function PrincipalDashboard() {
   const { user, schoolId } = useAuth();
   const lastUpdate = useSchoolRealtime(schoolId);
+  const { data: flags } = useFeatureFlags(schoolId);
+  const on = (key: string) => flags?.resolved[key] ?? false;
 
   const stats = useQuery({
     queryKey: ["principal-stats", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
       const c = (q: PromiseLike<{ count: number | null }>) => Promise.resolve(q).then((r) => r.count ?? 0);
-      const sid = schoolId!;
+      const sid = schoolId;
+      if (!sid) throw new Error("No school selected");
       // most recent date with attendance
       const { data: last } = await supabase.from("attendance_records").select("date").eq("school_id", sid).order("date", { ascending: false }).limit(1);
       const day = last?.[0]?.date ?? today();
@@ -43,7 +47,7 @@ export function PrincipalDashboard() {
 
   const [n, setN] = useState({ title: "", body: "", urgent: false });
   const post = async () => {
-    if (!schoolId || !n.title) return;
+    if (!schoolId || !n.title || !on("notices")) return;
     const { error } = await supabase.from("notices").insert({ school_id: schoolId, scope: "school", title: n.title, body: n.body, priority: n.urgent ? "urgent" : "normal", created_by: user!.id });
     if (error) { toast.error(error.message); return; }
     toast.success("Notice sent to every family");
@@ -60,8 +64,8 @@ export function PrincipalDashboard() {
         <Stat label="Learners" value={s?.students.toLocaleString() ?? "…"} />
         <Stat label="Parents" value={s?.parents.toLocaleString() ?? "…"} />
         <Stat label="Teachers" value={s?.teachers ?? "…"} />
-        <Stat label="Attendance" value={`${rate}%`} hint={s ? `${s.present}/${s.marked} on ${s.day}` : ""} />
-        <Stat label="Behaviour" value={s ? `+${s.positive} / −${s.negative}` : "…"} hint="merits / concerns" />
+        {on("attendance") && <Stat label="Attendance" value={`${rate}%`} hint={s ? `${s.present}/${s.marked} on ${s.day}` : ""} />}
+        {on("behaviour") && <div className="rounded-md border bg-card p-4"><p className="text-xs uppercase text-muted-foreground">Behaviour</p><p className="mt-1 font-display text-2xl font-semibold"><span className="text-success">+{s?.positive ?? "…"}</span><span className="text-muted-foreground"> / </span><span className="text-destructive">−{s?.negative ?? "…"}</span></p><p className="text-xs text-muted-foreground">merits / concerns</p></div>}
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card title="Classes by grade" className="lg:col-span-2">
@@ -70,7 +74,7 @@ export function PrincipalDashboard() {
               <div key={g}>
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Grade {g}</p>
                 <div className="flex flex-wrap gap-1">
-                  {s!.classes.filter((c) => c.grade === g).map((c) => (
+                  {s?.classes.filter((c) => c.grade === g).map((c) => (
                     <span key={c.id} className="rounded-md bg-secondary px-2 py-1 text-xs text-secondary-foreground">{c.name.replace("Grade ", "")}</span>
                   ))}
                 </div>
@@ -78,28 +82,28 @@ export function PrincipalDashboard() {
             ))}
           </div>
         </Card>
-        <Card title="School-wide notice">
+        {on("notices") && <Card title="School-wide notice">
           <div className="space-y-2">
             <Input placeholder="Title" value={n.title} onChange={(e) => setN({ ...n, title: e.target.value })} />
             <Textarea placeholder="Message to all parents" value={n.body} onChange={(e) => setN({ ...n, body: e.target.value })} />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={n.urgent} onChange={(e) => setN({ ...n, urgent: e.target.checked })} /> Urgent</label>
             <Button className="w-full" onClick={post}>Publish</Button>
           </div>
-        </Card>
-        <Card title={`Absent on ${s?.day ?? ""}`}>
+        </Card>}
+        {on("attendance") && <Card title={`Absent on ${s?.day ?? ""}`}>
           <ul className="space-y-1 text-sm">
             {(s?.absent ?? []).map((a, i) => (
               <li key={i} className="flex justify-between"><span>{a.students?.first_name} {a.students?.last_name}</span><span className="text-muted-foreground">{a.classes?.name}</span></li>
             ))}
           </ul>
-        </Card>
-        <Card title="Recent notices" className="lg:col-span-2">
+        </Card>}
+        {on("notices") && <Card title="Recent notices" className="lg:col-span-2">
           <ul className="divide-y text-sm">
             {(s?.notices ?? []).map((x) => (
               <li key={x.id} className="flex justify-between py-2"><span>{x.title}</span><span className="text-muted-foreground">{x.scope} · {new Date(x.published_at).toLocaleDateString()}</span></li>
             ))}
           </ul>
-        </Card>
+        </Card>}
       </div>
     </Shell>
   );
