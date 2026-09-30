@@ -45,6 +45,7 @@ function Master() {
   const clear = useServerFn(clearDemoData);
   const getStats = useServerFn(platformStats);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [summary, setSummary] = useState<Record<string, string | number> | null>(null);
   const [flagName, setFlagName] = useState("");
@@ -92,12 +93,25 @@ function Master() {
   const run = async (size: "small" | "large") => {
     setBusy(true);
     try {
-      const result = await seed({ data: { size } });
+      setProgress("Creating classes and learners…");
+      const started = await seed({ data: { size, phase: "start" } });
+      const schoolId = started.schoolId;
+      const jobId = started.jobId;
+      for (let i = 0; i < (size === "large" ? 14 : 10); i++) {
+        setProgress(`Adding attendance history · ${i + 1}/${size === "large" ? 14 : 10}`);
+        await seed({ data: { size, phase: "attendance", schoolId, jobId, chunk: i } });
+      }
+      for (let i = 0; i < (size === "large" ? 14 : 4); i++) {
+        setProgress(`Adding assessment results · ${i + 1}/${size === "large" ? 14 : 4}`);
+        await seed({ data: { size, phase: "marks", schoolId, jobId, chunk: i } });
+      }
+      setProgress("Preparing demo accounts…");
+      const result = await seed({ data: { size, phase: "finish", schoolId, jobId } });
       setCredentials(result.credentials);
       setSummary(result.summary);
       done(`${result.summary["students"]} learners created`);
     } catch (error) { fail(error); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setProgress(""); }
   };
 
   if (loading) return <div className="dark min-h-screen bg-background p-8 text-foreground">Loading…</div>;
@@ -131,7 +145,7 @@ function Master() {
           <TabsContent value="demo" className="space-y-6">
             <section className="border-b pb-6"><h2 className="font-display text-xl font-semibold">Demo schools</h2><p className="mt-1 text-sm text-muted-foreground">Generate a complete school and use the accounts below to explore each dashboard.</p>
               <div className="mt-5 flex flex-wrap gap-2"><Button disabled={busy} onClick={() => void run("large")}>{busy ? "Generating school…" : "Seed full demo school · 3,220 learners"}</Button><Button variant="outline" disabled={busy} onClick={() => void run("small")}>Seed smaller school · 600 learners</Button><Button variant="destructive" disabled={busy} onClick={async () => { if (!window.confirm("Delete all demo schools and their login accounts? This cannot be undone.")) return; setBusy(true); try { const result = await clear(); setCredentials([]); setSummary(null); done(`${result.removed} demo schools removed`); } catch (error) { fail(error); } finally { setBusy(false); } }}>Clear all demo data</Button></div>
-              {busy && <p role="status" className="mt-3 text-sm text-primary">Generating learner records and login accounts. Keep this page open.</p>}
+              {busy && <p role="status" className="mt-3 text-sm text-primary">{progress} Keep this page open.</p>}
             </section>
             {activeSummary && <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">{["students", "parents", "teachers", "classes", "attendance_records", "marks"].map(key => <div key={key} className="rounded-md border bg-card p-3"><p className="text-xs capitalize text-muted-foreground">{key.replaceAll("_", " ")}</p><p className="mt-1 text-xl font-semibold">{Number(activeSummary[key] ?? 0).toLocaleString()}</p></div>)}</div>}
             {demoSchool && <p className="text-sm text-muted-foreground">Full demo school: {demoSchool.name}. <Link to="/app" className="text-primary underline">Open your dashboard</Link></p>}
