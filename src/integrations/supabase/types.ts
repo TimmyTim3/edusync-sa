@@ -369,6 +369,47 @@ export type Database = {
           },
         ]
       }
+      disciplinary_reports: {
+        Row: {
+          created_at: string
+          created_by: string
+          filters: Json
+          id: string
+          prepared_for_hearing: boolean
+          school_id: string
+          snapshot: Json
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          filters?: Json
+          id?: string
+          prepared_for_hearing?: boolean
+          school_id: string
+          snapshot?: Json
+          title: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          filters?: Json
+          id?: string
+          prepared_for_hearing?: boolean
+          school_id?: string
+          snapshot?: Json
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disciplinary_reports_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_flags: {
         Row: {
           category: string
@@ -1286,6 +1327,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_manage_attendance_row: {
+        Args: { _class: string; _school: string; _student: string }
+        Returns: boolean
+      }
+      can_manage_register: {
+        Args: { _class: string; _school: string }
+        Returns: boolean
+      }
       can_see_student: {
         Args: { _school: string; _student: string }
         Returns: boolean
@@ -1304,7 +1353,19 @@ export type Database = {
       is_school_member: { Args: { _school: string }; Returns: boolean }
       is_school_staff: { Args: { _school: string }; Returns: boolean }
       my_student_ids: { Args: never; Returns: string[] }
+      seed_demo_attendance_chunk: {
+        Args: { p_from: string; p_school: string; p_to: string }
+        Returns: number
+      }
+      seed_demo_marks_chunk: {
+        Args: { p_from: number; p_school: string; p_to: number }
+        Returns: number
+      }
       seed_demo_school: {
+        Args: { p_name?: string; p_size?: string }
+        Returns: Json
+      }
+      seed_demo_school_base: {
         Args: { p_name?: string; p_size?: string }
         Returns: Json
       }

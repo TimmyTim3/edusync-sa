@@ -1,5 +1,8 @@
 # Current work
-- [ ] Correct saved behaviour category/point mapping and enforce it for future incidents.
-- [ ] Correct behaviour display and styling throughout dashboards.
-- [ ] Complete Master Control Centre controls for flags, branding, tenants, plans and demo credentials.
-- [ ] Verify preview, large demo count, and role dashboard flows with a real session where available.
+- [ ] Fix full demo seeding timeout and verify 3,220 learners with usable accounts.
+- [ ] Add secure multi-format learner import in Master Control Centre.
+- [ ] Add disciplinary analytics, filters, archive and PDF/CSV exports, plus teacher behaviour notebook.
+- [ ] Restrict attendance writes to class teacher; allow audited principal overrides, class assignment and dated history.
+- [ ] Add class-at-a-glance views and student drilldown for teacher and principal.
+- [ ] Add four persistent accessible themes and replace public pricing with Tim Web Development & Automation Agency branding.
+- [ ] Verify previews and role flows; correct outstanding issues.
