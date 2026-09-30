@@ -43,6 +43,13 @@
       "when": 1790751270548,
       "tag": "0005_register_ownership_and_disciplinary_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790751308620,
+      "tag": "0006_chunk_full_demo_generation",
+      "breakpoints": true
     }
   ]
 }

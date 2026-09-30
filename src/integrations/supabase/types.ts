@@ -1353,7 +1353,19 @@ export type Database = {
       is_school_member: { Args: { _school: string }; Returns: boolean }
       is_school_staff: { Args: { _school: string }; Returns: boolean }
       my_student_ids: { Args: never; Returns: string[] }
+      seed_demo_attendance_chunk: {
+        Args: { p_from: string; p_school: string; p_to: string }
+        Returns: number
+      }
+      seed_demo_marks_chunk: {
+        Args: { p_from: number; p_school: string; p_to: number }
+        Returns: number
+      }
       seed_demo_school: {
+        Args: { p_name?: string; p_size?: string }
+        Returns: Json
+      }
+      seed_demo_school_base: {
         Args: { p_name?: string; p_size?: string }
         Returns: Json
       }
