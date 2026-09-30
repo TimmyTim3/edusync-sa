@@ -23,29 +23,45 @@ function assertPlatformAdmin(claims: Record<string, unknown>) {
 /** Seeds a full demo school (database generation + real demo logins). */
 export const seedDemoSchool = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { size: "small" | "large"; name?: string }) => ({
+  .inputValidator((input: { size: "small" | "large"; name?: string; phase?: "start" | "attendance" | "marks" | "finish"; schoolId?: string; jobId?: string; chunk?: number }) => ({
     size: input.size === "small" ? ("small" as const) : ("large" as const),
     name: input.name?.slice(0, 120),
+    phase: input.phase ?? "start", schoolId: input.schoolId, jobId: input.jobId, chunk: input.chunk ?? 0,
   }))
   .handler(async ({ data, context }) => {
     const email = assertPlatformAdmin(context.claims as Record<string, unknown>);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: job } = await supabaseAdmin
-      .from("seed_jobs")
-      .insert({ status: "running", size: data.size })
-      .select("id")
-      .single();
+    let jobId = data.jobId;
+    let schoolId = data.schoolId;
 
     try {
-      const { data: summary, error } = await supabaseAdmin.rpc("seed_demo_school", {
-        p_size: data.size,
-        ...(data.name ? { p_name: data.name } : {}),
-      });
-      if (error) throw new Error(error.message);
-
-      const result = summary as SeedSummary;
-      const schoolId = String(result["school_id"]);
+      if (data.phase === "start") {
+        const { data: job, error: jobError } = await supabaseAdmin.from("seed_jobs").insert({ status: "running", size: data.size }).select("id").single();
+        if (jobError || !job) throw new Error(jobError?.message ?? "Could not start demo");
+        jobId = job.id;
+        const { data: base, error } = await supabaseAdmin.rpc("seed_demo_school_base", { p_size: data.size, ...(data.name ? { p_name: data.name } : {}) });
+        if (error) throw new Error(error.message);
+        schoolId = String((base as SeedSummary)["school_id"]);
+        await supabaseAdmin.from("seed_jobs").update({ school_id: schoolId, summary: base as Json }).eq("id", jobId);
+        return { schoolId, jobId, summary: base as SeedSummary, credentials: [] as Credential[] };
+      }
+      if (!schoolId || !jobId || !/^[0-9a-f-]{36}$/i.test(schoolId) || !/^[0-9a-f-]{36}$/i.test(jobId)) throw new Error("Invalid demo job");
+      const { data: job } = await supabaseAdmin.from("seed_jobs").select("school_id,status,summary,size").eq("id", jobId).single();
+      if (!job || job.school_id !== schoolId || job.status !== "running" || job.size !== data.size) throw new Error("Demo job is unavailable");
+      if (data.phase === "attendance") {
+        const start = new Date(); start.setUTCDate(start.getUTCDate() - (data.size === "large" ? 40 : 30) + data.chunk * 3);
+        const end = new Date(start); end.setUTCDate(end.getUTCDate() + 2);
+        const { error } = await supabaseAdmin.rpc("seed_demo_attendance_chunk", { p_school: schoolId, p_from: start.toISOString().slice(0,10), p_to: end.toISOString().slice(0,10) });
+        if (error) throw new Error(error.message);
+        return { schoolId, jobId, summary: job.summary as SeedSummary, credentials: [] as Credential[] };
+      }
+      if (data.phase === "marks") {
+        const { error } = await supabaseAdmin.rpc("seed_demo_marks_chunk", { p_school: schoolId, p_from: data.chunk * 5 + 1, p_to: data.chunk * 5 + 5 });
+        if (error) throw new Error(error.message);
+        return { schoolId, jobId, summary: job.summary as SeedSummary, credentials: [] as Credential[] };
+      }
+      const result = job.summary as SeedSummary;
       // Small schools get a sub-domain so the main demo logins stay on the big school.
       const domain = data.size === "large" ? DEMO_DOMAIN : `small.${DEMO_DOMAIN}`;
       const credentials: Credential[] = [];
@@ -173,6 +189,12 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
         i += 1;
       }
 
+      const count = async (table: "attendance_records" | "marks") => {
+        const { count: n } = await supabaseAdmin.from(table).select("id", { count: "exact", head: true }).eq("school_id", schoolId);
+        return n ?? 0;
+      };
+      result["attendance_records"] = await count("attendance_records");
+      result["marks"] = await count("marks");
       await supabaseAdmin
         .from("seed_jobs")
         .update({
@@ -182,7 +204,7 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
           credentials: credentials as unknown as Json,
           finished_at: new Date().toISOString(),
         })
-        .eq("id", job?.id ?? "");
+        .eq("id", jobId);
 
       await supabaseAdmin.from("audit_logs").insert({
         actor_email: email,
@@ -191,13 +213,13 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
         details: result as Json,
       });
 
-      return { summary: result, credentials, schoolId };
+      return { summary: result, credentials, schoolId, jobId };
     } catch (e) {
       const message = e instanceof Error ? e.message : "Seeding failed";
       await supabaseAdmin
         .from("seed_jobs")
         .update({ status: "failed", error: message, finished_at: new Date().toISOString() })
-        .eq("id", job?.id ?? "");
+        .eq("id", jobId ?? "");
       throw new Error(message);
     }
   });
