@@ -36,6 +36,13 @@
       "when": 1790662215373,
       "tag": "0004_normalize_behaviour_incident_polarity",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790751270548,
+      "tag": "0005_register_ownership_and_disciplinary_archive",
+      "breakpoints": true
     }
   ]
 }
