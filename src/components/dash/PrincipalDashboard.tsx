@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { useSchoolRealtime } from "@/lib/realtime";
 import { useFeatureFlags } from "@/lib/features";
 import { Shell, Card, Stat, today } from "./Shell";
+import { DisciplinaryReports } from "./DisciplinaryReports";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,6 +46,7 @@ export function PrincipalDashboard() {
     },
   });
 
+  const [tab, setTab] = useState<"overview" | "discipline">("overview");
   const [n, setN] = useState({ title: "", body: "", urgent: false });
   const post = async () => {
     if (!schoolId || !n.title || !on("notices")) return;
@@ -60,6 +62,18 @@ export function PrincipalDashboard() {
 
   return (
     <Shell title={s?.name ?? "School overview"} subtitle="Principal dashboard" lastUpdate={lastUpdate}>
+      <div className="mb-5 flex gap-2 print:hidden">
+        <Button size="sm" variant={tab === "overview" ? "default" : "outline"} onClick={() => setTab("overview")}>Overview</Button>
+        {on("behaviour") && (
+          <Button size="sm" variant={tab === "discipline" ? "default" : "outline"} onClick={() => setTab("discipline")}>
+            Disciplinary reports
+          </Button>
+        )}
+      </div>
+      {tab === "discipline" ? (
+        <DisciplinaryReports schoolId={schoolId} />
+      ) : (
+      <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="Learners" value={s?.students.toLocaleString() ?? "…"} />
         <Stat label="Parents" value={s?.parents.toLocaleString() ?? "…"} />
@@ -105,6 +119,8 @@ export function PrincipalDashboard() {
           </ul>
         </Card>}
       </div>
+      </>
+      )}
     </Shell>
   );
 }
