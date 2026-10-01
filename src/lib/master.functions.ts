@@ -49,6 +49,7 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
       if (!schoolId || !jobId || !/^[0-9a-f-]{36}$/i.test(schoolId) || !/^[0-9a-f-]{36}$/i.test(jobId)) throw new Error("Invalid demo job");
       const { data: job } = await supabaseAdmin.from("seed_jobs").select("school_id,status,summary,size").eq("id", jobId).single();
       if (!job || job.school_id !== schoolId || job.status !== "running" || job.size !== data.size) throw new Error("Demo job is unavailable");
+      const sid: string = schoolId;
       if (data.phase === "attendance") {
         const start = new Date(); start.setUTCDate(start.getUTCDate() - (data.size === "large" ? 40 : 30) + data.chunk * 3);
         const end = new Date(start); end.setUTCDate(end.getUTCDate() + 2);
@@ -99,8 +100,8 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
       ) => {
         await supabaseAdmin
           .from("profiles")
-          .upsert({ id: u.id, school_id: schoolId, full_name: u.fullName, email: u.email });
-        await supabaseAdmin.from("user_roles").insert({ user_id: u.id, school_id: schoolId, role });
+          .upsert({ id: u.id, school_id: sid, full_name: u.fullName, email: u.email });
+        await supabaseAdmin.from("user_roles").insert({ user_id: u.id, school_id: sid, role });
       };
 
       const principal = await makeUser("principal", "Dr Nomsa Khumalo");
@@ -142,7 +143,7 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
           }
           await supabaseAdmin.from("class_subject_teachers").insert(
             classes.map((c) => ({
-              school_id: schoolId,
+              school_id: sid,
               class_id: c.id,
               subject_id: subject.id,
               teacher_id: t.id,
@@ -190,7 +191,7 @@ export const seedDemoSchool = createServerFn({ method: "POST" })
       }
 
       const count = async (table: "attendance_records" | "marks") => {
-        const { count: n } = await supabaseAdmin.from(table).select("id", { count: "exact", head: true }).eq("school_id", schoolId);
+        const { count: n } = await supabaseAdmin.from(table).select("id", { count: "exact", head: true }).eq("school_id", sid);
         return n ?? 0;
       };
       result["attendance_records"] = await count("attendance_records");
