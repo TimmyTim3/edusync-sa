@@ -1,13 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   CalendarCheck,
+  Code2,
+  Database,
   GraduationCap,
   MessageCircle,
   NotebookPen,
   Megaphone,
+  Radio,
   ShieldCheck,
   Sparkles,
   Users,
+  Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -41,10 +45,11 @@ const features = [
   { icon: MessageCircle, title: "WhatsApp-ready", text: "Absence alerts and urgent notices straight to the parent's phone." },
 ];
 
-const plans = [
-  { name: "Starter", price: "R9", note: "per learner / month", items: ["Attendance", "Homework", "Notices"] },
-  { name: "Growth", price: "R15", note: "per learner / month", items: ["Everything in Starter", "Marks & behaviour", "Analytics"], featured: true },
-  { name: "Enterprise", price: "Custom", note: "annual contract", items: ["WhatsApp alerts", "Student portal", "White-label & report cards"] },
+const stack = [
+  { icon: Database, title: "Multi-tenant data layer", text: "Row-level security isolates every school's records." },
+  { icon: Radio, title: "Real-time sync", text: "Change-data-capture streams updates to parents instantly." },
+  { icon: ShieldCheck, title: "Role-based access", text: "Granular permissions audited on every privileged action." },
+  { icon: Workflow, title: "Automation ready", text: "Webhook and messaging pipelines for WhatsApp delivery." },
 ];
 
 function Landing() {
@@ -125,30 +130,45 @@ function Landing() {
       </section>
 
       <section className="mx-auto max-w-6xl px-6 py-20">
-        <h2 className="font-display text-3xl font-semibold">Simple per-learner pricing</h2>
-        <p className="mt-2 text-muted-foreground">30-day free trial. Monthly or annual billing.</p>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
-          {plans.map((p) => (
-            <div
-              key={p.name}
-              className={`rounded-2xl border p-6 ${p.featured ? "border-primary bg-card shadow-lift" : "bg-card"}`}
-            >
-              <h3 className="font-semibold">{p.name}</h3>
-              <p className="mt-3 font-display text-3xl font-semibold">{p.price}</p>
-              <p className="text-sm text-muted-foreground">{p.note}</p>
-              <ul className="mt-5 space-y-2 text-sm">
-                {p.items.map((i) => (
-                  <li key={i}>✓ {i}</li>
-                ))}
-              </ul>
+        <div className="relative overflow-hidden rounded-3xl border bg-card p-8 shadow-lift md:p-12">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
+          <div className="relative">
+            <p className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <Code2 className="h-3.5 w-3.5" /> Engineering
+            </p>
+            <h2 className="mt-5 font-display text-3xl font-semibold leading-tight md:text-4xl">
+              Software developed by{" "}
+              <span className="bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+                Tim Web Development &amp; Automation Agency
+              </span>
+            </h2>
+            <p className="mt-4 max-w-2xl text-muted-foreground">
+              Engineered as a secure multi-tenant platform: role-based access control enforced at database level,
+              event-driven real-time sync, and configuration-driven feature delivery.
+            </p>
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {stack.map((s) => (
+                <div key={s.title} className="rounded-2xl border bg-background/60 p-5">
+                  <s.icon className="h-5 w-5 text-primary" />
+                  <h3 className="mt-3 text-sm font-semibold">{s.title}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">{s.text}</p>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </section>
 
-      <footer className="border-t py-8 text-center text-sm text-muted-foreground">
-        © {new Date().getFullYear()} EduSync Parent Hub ·{" "}
-        <Link to="/master-login" className="hover:underline">Platform admin</Link>
+      <footer className="border-t py-10 text-center text-sm text-muted-foreground">
+        <p className="font-display text-base font-semibold text-foreground">
+          Tim Web Development &amp; Automation Agency
+        </p>
+        <p className="mt-1">Architecture, engineering and automation of the EduSync Parent Hub platform.</p>
+        <p className="mt-4">
+          © {new Date().getFullYear()} EduSync Parent Hub ·{" "}
+          <Link to="/master-login" className="hover:underline">Platform admin</Link>
+        </p>
       </footer>
     </div>
   );
