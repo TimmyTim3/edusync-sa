@@ -57,6 +57,13 @@
       "when": 1790942899753,
       "tag": "0007_service_role_seed_timeout",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790942927763,
+      "tag": "0008_allow_demo_purge",
+      "breakpoints": true
     }
   ]
 }
