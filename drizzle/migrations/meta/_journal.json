@@ -50,6 +50,13 @@
       "when": 1790751308620,
       "tag": "0006_chunk_full_demo_generation",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790942899753,
+      "tag": "0007_service_role_seed_timeout",
+      "breakpoints": true
     }
   ]
 }
