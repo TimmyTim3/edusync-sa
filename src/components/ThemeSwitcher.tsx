@@ -12,7 +12,7 @@ const KEY = "edusync-theme";
 
 export function applyStoredTheme() {
   const t = localStorage.getItem(KEY) ?? "midnight";
-  document.documentElement.dataset.theme = t;
+  document.documentElement.dataset["theme"] = t;
   return t;
 }
 
@@ -28,7 +28,7 @@ export function ThemeSwitcher() {
         value={theme}
         onChange={(e) => {
           localStorage.setItem(KEY, e.target.value);
-          document.documentElement.dataset.theme = e.target.value;
+          document.documentElement.dataset["theme"] = e.target.value;
           setTheme(e.target.value);
         }}
         className="rounded-md border bg-card px-2 py-1 text-foreground"

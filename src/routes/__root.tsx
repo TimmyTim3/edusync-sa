@@ -125,7 +125,7 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
   useEffect(() => {
-    document.documentElement.dataset.theme = localStorage.getItem("edusync-theme") ?? "midnight";
+    document.documentElement.dataset["theme"] = localStorage.getItem("edusync-theme") ?? "midnight";
   }, []);
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
