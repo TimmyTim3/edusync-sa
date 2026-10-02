@@ -232,15 +232,17 @@ export const clearDemoData = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: demoSchools } = await supabaseAdmin.from("schools").select("id").eq("is_demo", true);
     const ids = (demoSchools ?? []).map((s) => s.id);
-    if (ids.length) {
-      const { data: roles } = await supabaseAdmin.from("user_roles").select("user_id").in("school_id", ids);
-      const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      const authIds = new Set((list?.users ?? []).map((u) => u.id));
-      for (const r of roles ?? []) {
-        if (authIds.has(r.user_id)) await supabaseAdmin.auth.admin.deleteUser(r.user_id);
+    // Remove every demo login (they all live on the demo domain).
+    for (let page = 1; page <= 10; page++) {
+      const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+      for (const u of list?.users ?? []) {
+        if (u.email?.toLowerCase().endsWith(DEMO_DOMAIN)) await supabaseAdmin.auth.admin.deleteUser(u.id);
       }
-      await supabaseAdmin.from("seed_jobs").delete().in("school_id", ids);
-      await supabaseAdmin.from("schools").delete().in("id", ids);
+      if (!list || list.users.length < 1000) break;
+    }
+    if (ids.length) {
+      const { error } = await supabaseAdmin.rpc("clear_demo_data");
+      if (error) throw new Error(error.message);
     }
     await supabaseAdmin
       .from("audit_logs")
