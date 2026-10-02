@@ -4,7 +4,7 @@ import type { Database, Json } from "@/integrations/supabase/types";
 const DEMO_DOMAIN = "demo-edusync.school";
 export type Credential = { role: string; label: string; email: string; password: string };
 export type SeedSummary = Record<string, string | number>;
-export type SeedInput = { size: "small" | "large"; name?: string; phase: "start" | "attendance" | "marks" | "finish"; schoolId?: string; jobId?: string; chunk: number };
+export type SeedInput = { size: "small" | "large"; name: string | undefined; phase: "start" | "attendance" | "marks" | "finish"; schoolId: string | undefined; jobId: string | undefined; chunk: number };
 
 function randomPassword() {
   return "Demo#" + Math.random().toString(36).slice(2, 8) + "2026";

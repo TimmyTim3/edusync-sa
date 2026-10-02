@@ -5,12 +5,7 @@ import type { Json } from "@/integrations/supabase/types";
 const PLATFORM_ADMIN_EMAIL = "timmytim691@gmail.com";
 const DEMO_DOMAIN = "demo-edusync.school";
 
-export type Credential = { role: string; label: string; email: string; password: string };
-export type SeedSummary = Record<string, string | number>;
-
-function randomPassword() {
-  return "Demo#" + Math.random().toString(36).slice(2, 8) + "2026";
-}
+export type { Credential, SeedSummary } from "./seed.server";
 
 function assertPlatformAdmin(claims: Record<string, unknown>) {
   const email = String(claims["email"] ?? "").toLowerCase();
