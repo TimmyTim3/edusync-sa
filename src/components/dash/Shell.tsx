@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Users, LogOut, Radio } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 export function Shell({ title, subtitle, lastUpdate, children }: { title: string; subtitle?: string; lastUpdate: Date | null; children: ReactNode }) {
   const { user, signOut, isPlatformAdmin } = useAuth();
@@ -18,6 +19,7 @@ export function Shell({ title, subtitle, lastUpdate, children }: { title: string
             <Radio className="h-3 w-3 text-primary" />
             {lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : "Live"}
           </span>
+          <ThemeSwitcher />
           {isPlatformAdmin && <Button asChild size="sm" variant="outline"><Link to="/master">Control Centre</Link></Button>}
           <span className="hidden text-sm text-muted-foreground md:inline">{user?.email}</span>
           <Button size="icon" variant="ghost" onClick={() => void signOut()} aria-label="Sign out"><LogOut className="h-4 w-4" /></Button>
