@@ -111,6 +111,9 @@ export async function runSeedPhase(supabaseAdmin: SupabaseClient<Database>, data
       for (const spec of teacherSpecs) {
         const t = await makeUser(spec.local, spec.name);
         await linkUser(t, "teacher");
+        // Each named teacher is the official class teacher (register owner) of one class.
+        const ownClass = classes?.[teacherSpecs.indexOf(spec)];
+        if (ownClass) await supabaseAdmin.from("classes").update({ class_teacher_id: t.id }).eq("id", ownClass.id);
         const subject = (subjects ?? []).find((s) => s.name === spec.subject) ?? (subjects ?? [])[0];
         if (subject && classes?.length) {
           for (const c of classes) {
@@ -137,11 +140,18 @@ export async function runSeedPhase(supabaseAdmin: SupabaseClient<Database>, data
         });
       }
 
-      const { data: links } = await supabaseAdmin
-        .from("parent_student")
-        .select("parent_id")
-        .eq("school_id", schoolId)
-        .limit(5000);
+      // The data API caps each response at 1,000 rows, so page through every link.
+      const links: { parent_id: string }[] = [];
+      for (let from = 0; from < 20000; from += 1000) {
+        const { data: page } = await supabaseAdmin
+          .from("parent_student")
+          .select("parent_id")
+          .eq("school_id", sid)
+          .order("id")
+          .range(from, from + 999);
+        links.push(...(page ?? []));
+        if (!page || page.length < 1000) break;
+      }
       const counts = new Map<string, number>();
       for (const l of links ?? []) counts.set(l.parent_id, (counts.get(l.parent_id) ?? 0) + 1);
       const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
