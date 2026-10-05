@@ -7,6 +7,7 @@ import { useSchoolRealtime } from "@/lib/realtime";
 import { Shell, Card, Stat, Empty, today } from "./Shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { AttendanceCalendar } from "./AttendanceCalendar";
 
 type Child = { id: string; first_name: string; last_name: string; admission_no: string; photo_url: string | null; class_id: string | null; classes: { name: string } | null };
 
@@ -51,9 +52,9 @@ export function ParentDashboard() {
     enabled: !!child,
     queryFn: async () => {
       const [att, marks, beh, hw, notices] = await Promise.all([
-        supabase.from("attendance_records").select("date, status").eq("student_id", child!.id).order("date", { ascending: false }).limit(60),
+        supabase.from("attendance_records").select("date, status").eq("student_id", child!.id).order("date", { ascending: false }).limit(400),
         supabase.from("marks").select("score, assessments(title, max_marks, date, subjects(name))").eq("student_id", child!.id).order("created_at", { ascending: false }).limit(30),
-        supabase.from("behaviour_notes").select("id, category, is_positive, note, points, created_at").eq("student_id", child!.id).order("created_at", { ascending: false }).limit(10),
+        supabase.from("behaviour_notes").select("id, category, is_positive, note, points, created_at").eq("student_id", child!.id).order("created_at", { ascending: false }).limit(200),
         child!.class_id
           ? supabase.from("homework").select("id, title, due_date, subjects(name)").eq("class_id", child!.class_id).order("due_date").limit(40)
           : Promise.resolve({ data: [] }),
@@ -101,14 +102,8 @@ export function ParentDashboard() {
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         {on("attendance") && (
-          <Card title="Attendance history">
-            <div className="flex flex-wrap gap-1">
-              {[...att].reverse().map((a) => (
-                <span key={a.date} title={`${a.date}: ${a.status}`} className={`h-6 w-6 rounded text-center text-[10px] leading-6 ${statusColor[a.status]}`}>
-                  {a.date.slice(8)}
-                </span>
-              ))}
-            </div>
+          <Card title="Attendance history" className="lg:col-span-3">
+            <AttendanceCalendar records={att} />
           </Card>
         )}
         {on("marks") && (

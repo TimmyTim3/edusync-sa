@@ -38,11 +38,18 @@ export function PrincipalDashboard() {
         c(supabase.from("behaviour_notes").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("is_positive", false)),
       ]);
       const { data: classes } = await supabase.from("classes").select("id, name, grade").eq("school_id", sid).order("grade").order("name");
-      const { data: absent } = await supabase
-        .from("attendance_records").select("status, students(first_name, last_name), classes(name)")
-        .eq("school_id", sid).eq("date", day).eq("status", "absent").limit(15);
+      const notPresent: unknown[] = [];
+      for (let from = 0; from < 5000; from += 1000) {
+        const { data: page } = await supabase
+          .from("attendance_records").select("status, students(first_name, last_name), classes(name)")
+          .eq("school_id", sid).eq("date", day).in("status", ["absent", "excused", "half_day"]).order("status").range(from, from + 999);
+        notPresent.push(...(page ?? []));
+        if (!page || page.length < 1000) break;
+      }
+      const absent = notPresent as { status: string; students: { first_name: string; last_name: string } | null; classes: { name: string } | null }[];
+      const late = await c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day).eq("status", "late"));
       const { data: notices } = await supabase.from("notices").select("id, title, scope, published_at").eq("school_id", sid).order("published_at", { ascending: false }).limit(8);
-      return { name: school.data?.name ?? "School", day, students, parents, teachers, marked, present, positive, negative, classes: classes ?? [], absent: (absent ?? []) as unknown as { students: { first_name: string; last_name: string } | null; classes: { name: string } | null }[], notices: notices ?? [] };
+      return { name: school.data?.name ?? "School", day, students, parents, teachers, marked, present, late, positive, negative, classes: classes ?? [], absent, notices: notices ?? [] };
     },
   });
 
@@ -78,7 +85,7 @@ export function PrincipalDashboard() {
         <Stat label="Learners" value={s?.students.toLocaleString() ?? "…"} />
         <Stat label="Parents" value={s?.parents.toLocaleString() ?? "…"} />
         <Stat label="Teachers" value={s?.teachers ?? "…"} />
-        {on("attendance") && <Stat label="Attendance" value={`${rate}%`} hint={s ? `${s.present}/${s.marked} on ${s.day}` : ""} />}
+        {on("attendance") && <Stat label="Attendance" value={`${rate}%`} hint={s ? `${s.present} of ${s.marked} at school (${s.late} late) · ${s.marked - s.present} not at school · ${s.day}` : ""} />}
         {on("behaviour") && <div className="rounded-md border bg-card p-4"><p className="text-xs uppercase text-muted-foreground">Behaviour</p><p className="mt-1 font-display text-2xl font-semibold"><span className="text-success">+{s?.positive ?? "…"}</span><span className="text-muted-foreground"> / </span><span className="text-destructive">−{s?.negative ?? "…"}</span></p><p className="text-xs text-muted-foreground">merits / concerns</p></div>}
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -104,10 +111,10 @@ export function PrincipalDashboard() {
             <Button className="w-full" onClick={post}>Publish</Button>
           </div>
         </Card>}
-        {on("attendance") && <Card title={`Absent on ${s?.day ?? ""}`}>
-          <ul className="space-y-1 text-sm">
+        {on("attendance") && <Card title={`Not at school on ${s?.day ?? ""} (${s?.absent.length ?? 0})`}>
+          <ul className="max-h-96 space-y-1 overflow-y-auto pr-1 text-sm">
             {(s?.absent ?? []).map((a, i) => (
-              <li key={i} className="flex justify-between"><span>{a.students?.first_name} {a.students?.last_name}</span><span className="text-muted-foreground">{a.classes?.name}</span></li>
+              <li key={i} className="flex items-center justify-between gap-2"><span className="truncate">{a.students?.first_name} {a.students?.last_name}</span><span className="shrink-0 text-xs text-muted-foreground">{a.classes?.name} · <span className={a.status === "absent" ? "text-destructive" : "text-primary"}>{a.status.replace("_", " ")}</span></span></li>
             ))}
           </ul>
         </Card>}

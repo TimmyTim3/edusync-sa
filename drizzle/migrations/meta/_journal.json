@@ -64,6 +64,13 @@
       "when": 1790942927763,
       "tag": "0008_allow_demo_purge",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791179161053,
+      "tag": "0009_clear_demo_full_reset",
+      "breakpoints": true
     }
   ]
 }
