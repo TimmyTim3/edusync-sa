@@ -1,0 +1,151 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { X } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, Empty, today } from "./Shell";
+import { ATT_STYLES, AttendanceCalendar, AttendanceLegend } from "./AttendanceCalendar";
+
+const RANGES = { week: 7, month: 31, term: 92 } as const;
+type Range = keyof typeof RANGES;
+
+async function pageAll<T>(make: (from: number, to: number) => PromiseLike<{ data: T[] | null }>) {
+  const out: T[] = [];
+  for (let from = 0; from < 50000; from += 1000) {
+    const { data } = await make(from, from + 999);
+    out.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+
+export function ClassGlance({ classId, className, onClose }: { classId: string; className: string; onClose?: () => void }) {
+  const [range, setRange] = useState<Range>("month");
+  const [day, setDay] = useState(today());
+  const [studentId, setStudentId] = useState<string | null>(null);
+  const cutoff = new Date(Date.now() - RANGES[range] * 86400000).toISOString().slice(0, 10);
+
+  const q = useQuery({
+    queryKey: ["class-glance", classId, cutoff],
+    queryFn: async () => {
+      const { data: students } = await supabase.from("students").select("id, first_name, last_name, admission_no").eq("class_id", classId).is("deleted_at", null).order("last_name");
+      const ids = (students ?? []).map((s) => s.id);
+      const [att, marks, beh, hw, cls] = await Promise.all([
+        pageAll<{ student_id: string; date: string; status: string }>((a, b) => supabase.from("attendance_records").select("student_id, date, status").eq("class_id", classId).gte("date", cutoff).order("date").range(a, b)),
+        pageAll<{ student_id: string; score: number | null; assessments: { max_marks: number; date: string } | null }>((a, b) => supabase.from("marks").select("student_id, score, assessments!inner(max_marks, date, class_id)").eq("assessments.class_id", classId).order("id").range(a, b) as never),
+        ids.length ? pageAll<{ student_id: string; is_positive: boolean; category: string; created_at: string }>((a, b) => supabase.from("behaviour_notes").select("student_id, is_positive, category, created_at").in("student_id", ids).gte("created_at", cutoff).order("created_at").range(a, b)) : Promise.resolve([]),
+        supabase.from("homework").select("id, title, due_date").eq("class_id", classId).order("due_date", { ascending: false }).limit(20),
+        supabase.from("classes").select("class_teacher_id").eq("id", classId).single(),
+      ]);
+      let teacher = "";
+      if (cls.data?.class_teacher_id) {
+        const { data: p } = await supabase.from("profiles").select("full_name").eq("id", cls.data.class_teacher_id).maybeSingle();
+        teacher = p?.full_name ?? "";
+      }
+      return { students: students ?? [], att, marks, beh, hw: hw.data ?? [], teacher };
+    },
+  });
+
+  // Day register lookup (independent of range)
+  const dayQ = useQuery({
+    queryKey: ["class-day", classId, day],
+    queryFn: async () => (await supabase.from("attendance_records").select("student_id, status").eq("class_id", classId).eq("date", day)).data ?? [],
+  });
+
+  const d = q.data;
+  const rows = (d?.students ?? []).map((s) => {
+    const a = d!.att.filter((r) => r.student_id === s.id);
+    const atPct = a.length ? Math.round((a.filter((r) => r.status === "present" || r.status === "late").length / a.length) * 100) : null;
+    const late = a.filter((r) => r.status === "late").length;
+    const m = d!.marks.filter((r) => r.student_id === s.id && r.score != null);
+    const avg = m.length ? Math.round(m.reduce((t, r) => t + (Number(r.score) / (r.assessments?.max_marks ?? 100)) * 100, 0) / m.length) : null;
+    const b = d!.beh.filter((r) => r.student_id === s.id);
+    const neg = b.filter((r) => !r.is_positive).length;
+    const pos = b.length - neg;
+    const flags = [atPct != null && atPct < 85 && "attendance", avg != null && avg < 50 && "marks", neg >= 2 && "behaviour"].filter(Boolean) as string[];
+    return { ...s, atPct, late, avg, pos, neg, flags };
+  });
+  const needing = rows.filter((r) => r.flags.length).sort((a, b) => b.flags.length - a.flags.length);
+  const top = rows.filter((r) => r.avg != null).sort((a, b) => (b.avg ?? 0) - (a.avg ?? 0)).slice(0, 5);
+  const lateComers = rows.filter((r) => r.late > 0).sort((a, b) => b.late - a.late).slice(0, 5);
+  const offenders = rows.filter((r) => r.neg > 0).sort((a, b) => b.neg - a.neg).slice(0, 5);
+  const allAtt = d?.att ?? [];
+  const classPct = allAtt.length ? Math.round((allAtt.filter((r) => r.status === "present" || r.status === "late").length / allAtt.length) * 100) : 0;
+  const classAvg = rows.filter((r) => r.avg != null).length ? Math.round(rows.reduce((t, r) => t + (r.avg ?? 0), 0) / rows.filter((r) => r.avg != null).length) : 0;
+  const offences = Object.entries((d?.beh ?? []).filter((b) => !b.is_positive).reduce<Record<string, number>>((acc, b) => ({ ...acc, [b.category]: (acc[b.category] ?? 0) + 1 }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const overdue = (d?.hw ?? []).filter((h) => h.due_date < today());
+  const dayMap = new Map((dayQ.data ?? []).map((r) => [r.student_id, r.status]));
+  const dot = (r: (typeof rows)[number]) => (r.flags.length >= 2 ? "bg-destructive" : r.flags.length ? "bg-warning" : "bg-success");
+  const selected = rows.find((r) => r.id === studentId);
+
+  const Person = ({ r, right }: { r: (typeof rows)[number]; right: string }) => (
+    <li><button className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-muted" onClick={() => setStudentId(r.id)}>
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot(r)}`} /><span className="flex-1 truncate">{r.first_name} {r.last_name}</span><span className="shrink-0 text-xs text-muted-foreground">{right}</span>
+    </button></li>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="mr-auto"><h2 className="font-display text-xl font-semibold">{className} · Class at a glance</h2>
+          <p className="text-xs text-muted-foreground">Register controlled by class teacher: {d?.teacher || "not assigned"}</p></div>
+        {(Object.keys(RANGES) as Range[]).map((r) => <Button key={r} size="sm" variant={range === r ? "default" : "outline"} onClick={() => setRange(r)}>This {r}</Button>)}
+        {onClose && <Button size="icon" variant="ghost" aria-label="Close" onClick={onClose}><X className="h-4 w-4" /></Button>}
+      </div>
+      {q.isLoading ? <Card><Empty text="Loading class…" /></Card> : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {[["Learners", rows.length], ["Attendance", `${classPct}%`], ["Average mark", `${classAvg}%`], ["Need attention", needing.length]].map(([l, v]) => (
+              <div key={l} className="rounded-2xl border bg-card p-4"><p className="text-xs uppercase text-muted-foreground">{l}</p><p className="font-display text-2xl font-semibold">{v}</p></div>
+            ))}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Card title={`Needing attention (${needing.length})`}><ul className="max-h-72 overflow-y-auto text-sm">{needing.length ? needing.map((r) => <Person key={r.id} r={r} right={r.flags.join(", ")} />) : <Empty text="Everyone is on track." />}</ul></Card>
+            <Card title="Top performers"><ul className="text-sm">{top.map((r) => <Person key={r.id} r={r} right={`${r.avg}%`} />)}</ul></Card>
+            <Card title="Behaviour"><p className="mb-2 text-sm"><span className="text-success">+{(d?.beh ?? []).filter((b) => b.is_positive).length} merits</span> · <span className="text-destructive">{(d?.beh ?? []).filter((b) => !b.is_positive).length} concerns</span></p>
+              <p className="text-xs text-muted-foreground">Common offences</p><ul className="mb-2 text-sm">{offences.map(([k, v]) => <li key={k} className="flex justify-between"><span>{k}</span><span>{v}</span></li>)}</ul>
+              <p className="text-xs text-muted-foreground">Most concerns</p><ul className="text-sm">{offenders.map((r) => <Person key={r.id} r={r} right={`${r.neg}`} />)}</ul></Card>
+            <Card title="Most late arrivals"><ul className="text-sm">{lateComers.length ? lateComers.map((r) => <Person key={r.id} r={r} right={`${r.late}× late`} />) : <Empty text="No late arrivals." />}</ul></Card>
+            <Card title={`Overdue homework (${overdue.length})`}><ul className="text-sm">{overdue.slice(0, 6).map((h) => <li key={h.id} className="flex justify-between gap-2"><span className="truncate">{h.title}</span><span className="text-xs text-destructive">{h.due_date}</span></li>)}</ul></Card>
+            <Card title="Register for a date">
+              <Input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} />
+              {dayQ.data && !dayQ.data.length ? <Empty text="No register for this date (weekend, holiday or not yet marked)." /> : (
+                <>
+                  <div className="mt-2 flex flex-wrap gap-1 text-xs">{Object.entries(ATT_STYLES).map(([k, s]) => <span key={k} className={`rounded border px-2 py-0.5 ${s.cls}`}>{s.symbol} {s.label}: {(dayQ.data ?? []).filter((r) => r.status === k).length}</span>)}</div>
+                  <ul className="mt-2 max-h-56 overflow-y-auto text-sm">{rows.map((r) => { const st = dayMap.get(r.id); const s = st ? ATT_STYLES[st] : undefined; return <li key={r.id} className="flex justify-between py-0.5"><span className="truncate">{r.first_name} {r.last_name}</span><span className={`rounded border px-1.5 text-xs ${s?.cls ?? ""}`}>{s ? `${s.symbol} ${s.label}` : "—"}</span></li>; })}</ul>
+                </>
+              )}
+              <AttendanceLegend />
+            </Card>
+          </div>
+          {selected && <StudentRecord student={selected} onClose={() => setStudentId(null)} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+export function StudentRecord({ student, onClose }: { student: { id: string; first_name: string; last_name: string; admission_no: string }; onClose: () => void }) {
+  const q = useQuery({
+    queryKey: ["student-record", student.id],
+    queryFn: async () => {
+      const [att, beh] = await Promise.all([
+        supabase.from("attendance_records").select("date, status").eq("student_id", student.id).order("date", { ascending: false }).limit(400),
+        supabase.from("behaviour_notes").select("id, category, is_positive, note, points, created_at").eq("student_id", student.id).order("created_at", { ascending: false }).limit(200),
+      ]);
+      return { att: att.data ?? [], beh: beh.data ?? [] };
+    },
+  });
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 p-0 backdrop-blur sm:items-center sm:p-4" onClick={onClose}>
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border bg-card p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between"><div><h3 className="font-display text-lg font-semibold">{student.first_name} {student.last_name}</h3><p className="text-xs text-muted-foreground">{student.admission_no} · full record</p></div>
+          <Button size="icon" variant="ghost" aria-label="Close" onClick={onClose}><X className="h-4 w-4" /></Button></div>
+        <AttendanceCalendar records={q.data?.att ?? []} />
+        <h4 className="mt-5 mb-2 font-semibold">Behaviour notes ({q.data?.beh.length ?? 0})</h4>
+        <ul className="divide-y text-sm">{(q.data?.beh ?? []).map((b) => <li key={b.id} className="py-2"><div className="flex justify-between"><span className="font-medium">{b.category}</span><span className={b.is_positive ? "text-success" : "text-destructive"}>{b.is_positive ? "+" : "−"}{Math.abs(b.points)}</span></div><p className="text-muted-foreground">{b.note}</p><p className="text-xs text-muted-foreground">{new Date(b.created_at).toLocaleDateString()}</p></li>)}</ul>
+      </div>
+    </div>
+  );
+}

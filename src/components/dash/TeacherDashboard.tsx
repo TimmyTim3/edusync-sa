@@ -10,6 +10,7 @@ import { Shell, Card, Stat, Empty, today } from "./Shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ClassGlance } from "./ClassGlance";
 
 type Status = Database["public"]["Enums"]["attendance_status"];
 type Assign = { class_id: string; subject_id: string; classes: { name: string } | null; subjects: { name: string } | null };
@@ -32,6 +33,7 @@ export function TeacherDashboard() {
   });
   const list = assigns.data ?? [];
   const [idx, setIdx] = useState(0);
+  const [glance, setGlance] = useState(false);
   const cur = list[idx];
 
   const students = useQuery({
@@ -116,11 +118,13 @@ export function TeacherDashboard() {
     <Shell title="Teacher dashboard" subtitle={cur ? `${cur.classes?.name} · ${cur.subjects?.name}` : ""} lastUpdate={lastUpdate}>
       <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
         {list.map((a, i) => (
-          <Button key={a.class_id + a.subject_id} size="sm" variant={i === idx ? "default" : "outline"} onClick={() => setIdx(i)}>
+          <Button key={a.class_id + a.subject_id} size="sm" className="shrink-0" variant={i === idx ? "default" : "outline"} onClick={() => setIdx(i)}>
             {a.classes?.name} · {a.subjects?.name}
           </Button>
         ))}
+        {cur && <Button size="sm" variant="secondary" className="shrink-0" onClick={() => setGlance(!glance)}>{glance ? "Back to marking" : "Class at a glance"}</Button>}
       </div>
+      {glance && cur ? <ClassGlance classId={cur.class_id} className={cur.classes?.name ?? "Class"} /> : <>
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Learners" value={st.length} />
         {on("attendance") && <Stat label="Present (today)" value={present} />}
@@ -185,6 +189,7 @@ export function TeacherDashboard() {
           </Card>}
         </div>
       </div>
+      </>}
     </Shell>
   );
 }
