@@ -59,7 +59,7 @@ export function AttendanceCalendar({ records }: { records: AttRec[] }) {
       <div className="mb-4 grid grid-cols-3 gap-2 text-center text-xs sm:grid-cols-6">
         <div className="rounded-md border p-2"><p className="text-lg font-semibold">{pct}%</p>Attendance</div>
         {(["present", "late", "absent", "excused", "half_day"] as const).map((s) => (
-          <div key={s} className={`rounded-md border p-2 ${ATT_STYLES[s].cls}`}><p className="text-lg font-semibold">{count(s)}</p>{ATT_STYLES[s].label}</div>
+          <div key={s} className={`rounded-md border p-2 ${ATT_STYLES[s]!.cls}`}><p className="text-lg font-semibold">{count(s)}</p>{ATT_STYLES[s]!.label}</div>
         ))}
       </div>
       <div className="mx-auto max-w-md">
@@ -77,7 +77,7 @@ export function AttendanceCalendar({ records }: { records: AttRec[] }) {
             const key = iso(d);
             const st = byDate.get(key);
             const future = key > todayIso;
-            const s = st ? ATT_STYLES[st] : NONE;
+            const s = (st && ATT_STYLES[st]) || NONE;
             return (
               <div key={i} title={`${key}: ${st ? s.label : future ? "Upcoming" : NONE.label}`}
                 className={`flex aspect-square flex-col items-center justify-center rounded border text-xs ${future && !st ? "border-transparent text-muted-foreground/50" : s.cls} ${key === todayIso ? "ring-2 ring-ring" : ""}`}>
