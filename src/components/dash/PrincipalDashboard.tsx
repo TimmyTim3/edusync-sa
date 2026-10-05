@@ -7,6 +7,7 @@ import { useSchoolRealtime } from "@/lib/realtime";
 import { useFeatureFlags } from "@/lib/features";
 import { Shell, Card, Stat, today } from "./Shell";
 import { DisciplinaryReports } from "./DisciplinaryReports";
+import { ClassGlance } from "./ClassGlance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,6 +55,7 @@ export function PrincipalDashboard() {
   });
 
   const [tab, setTab] = useState<"overview" | "discipline">("overview");
+  const [glance, setGlance] = useState<{ id: string; name: string } | null>(null);
   const [n, setN] = useState({ title: "", body: "", urgent: false });
   const post = async () => {
     if (!schoolId || !n.title || !on("notices")) return;
@@ -79,8 +81,11 @@ export function PrincipalDashboard() {
       </div>
       {tab === "discipline" ? (
         <DisciplinaryReports schoolId={schoolId} />
+      ) : glance ? (
+        <ClassGlance classId={glance.id} className={glance.name} onClose={() => setGlance(null)} />
       ) : (
       <>
+      <p className="mb-3 text-xs text-muted-foreground">Tip: tap any class below to open its Class at a Glance.</p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="Learners" value={s?.students.toLocaleString() ?? "…"} />
         <Stat label="Parents" value={s?.parents.toLocaleString() ?? "…"} />
@@ -96,7 +101,7 @@ export function PrincipalDashboard() {
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Grade {g}</p>
                 <div className="flex flex-wrap gap-1">
                   {s?.classes.filter((c) => c.grade === g).map((c) => (
-                    <span key={c.id} className="rounded-md bg-secondary px-2 py-1 text-xs text-secondary-foreground">{c.name.replace("Grade ", "")}</span>
+                    <button key={c.id} onClick={() => { setGlance({ id: c.id, name: c.name }); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="rounded-md bg-secondary px-2 py-1 text-xs text-secondary-foreground hover:bg-primary hover:text-primary-foreground">{c.name.replace("Grade ", "")}</button>
                   ))}
                 </div>
               </div>
