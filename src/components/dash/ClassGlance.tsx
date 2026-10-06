@@ -75,15 +75,32 @@ export function ClassGlance({ classId, className, onClose }: { classId: string; 
   const classAvg = rows.filter((r) => r.avg != null).length ? Math.round(rows.reduce((t, r) => t + (r.avg ?? 0), 0) / rows.filter((r) => r.avg != null).length) : 0;
   const offences = Object.entries((d?.beh ?? []).filter((b) => !b.is_positive).reduce<Record<string, number>>((acc, b) => ({ ...acc, [b.category]: (acc[b.category] ?? 0) + 1 }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const overdue = (d?.hw ?? []).filter((h) => h.due_date < today());
+  const doneQ = useQuery({
+    queryKey: ["class-hw-done", classId, overdue.map((h) => h.id).join(",")],
+    enabled: overdue.length > 0,
+    queryFn: async () => (await supabase.from("homework_completions").select("homework_id, student_id").in("homework_id", overdue.slice(0, 6).map((h) => h.id))).data ?? [],
+  });
+  const missing = (hwId: string) => {
+    const done = new Set((doneQ.data ?? []).filter((c) => c.homework_id === hwId).map((c) => c.student_id));
+    return rows.filter((r) => !done.has(r.id));
+  };
   const dayMap = new Map((dayQ.data ?? []).map((r) => [r.student_id, r.status]));
-  const dot = (r: (typeof rows)[number]) => (r.flags.length >= 2 ? "bg-destructive" : r.flags.length ? "bg-warning" : "bg-success");
+  type Tone = "good" | "warn" | "bad";
+  const health = (r: (typeof rows)[number]): Tone => (r.flags.length >= 2 ? "bad" : r.flags.length ? "warn" : "good");
+  const TONE: Record<Tone, string> = { good: "bg-success", warn: "bg-warning", bad: "bg-destructive" };
+  const TEXT: Record<Tone, string> = { good: "text-success", warn: "text-warning", bad: "text-destructive" };
   const selected = rows.find((r) => r.id === studentId);
 
-  const Person = ({ r, right }: { r: (typeof rows)[number]; right: string }) => (
-    <li><button className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-muted" onClick={() => setStudentId(r.id)}>
-      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot(r)}`} /><span className="flex-1 truncate">{r.first_name} {r.last_name}</span><span className="shrink-0 text-xs text-muted-foreground">{right}</span>
-    </button></li>
-  );
+  // Each list sets its own tone so the dot always matches what the list is about:
+  // top performers = green, late arrivals = amber/red, concerns = red.
+  const Person = ({ r, right, tone }: { r: (typeof rows)[number]; right: string; tone?: Tone }) => {
+    const t = tone ?? health(r);
+    return (
+      <li><button className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-muted" onClick={() => setStudentId(r.id)}>
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${TONE[t]}`} /><span className="flex-1 truncate">{r.first_name} {r.last_name}</span><span className={`shrink-0 text-xs ${tone ? TEXT[t] : "text-muted-foreground"}`}>{right}</span>
+      </button></li>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -102,12 +119,16 @@ export function ClassGlance({ classId, className, onClose }: { classId: string; 
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <Card title={`Needing attention (${needing.length})`}><ul className="max-h-72 overflow-y-auto text-sm">{needing.length ? needing.map((r) => <Person key={r.id} r={r} right={r.flags.join(", ")} />) : <Empty text="Everyone is on track." />}</ul></Card>
-            <Card title="Top performers"><ul className="text-sm">{top.map((r) => <Person key={r.id} r={r} right={`${r.avg}%`} />)}</ul></Card>
-            <Card title="Behaviour"><p className="mb-2 text-sm"><span className="text-success">+{(d?.beh ?? []).filter((b) => b.is_positive).length} merits</span> · <span className="text-destructive">{(d?.beh ?? []).filter((b) => !b.is_positive).length} concerns</span></p>
-              <p className="text-xs text-muted-foreground">Common offences</p><ul className="mb-2 text-sm">{offences.map(([k, v]) => <li key={k} className="flex justify-between"><span>{k}</span><span>{v}</span></li>)}</ul>
-              <p className="text-xs text-muted-foreground">Most concerns</p><ul className="text-sm">{offenders.map((r) => <Person key={r.id} r={r} right={`${r.neg}`} />)}</ul></Card>
-            <Card title="Most late arrivals"><ul className="text-sm">{lateComers.length ? lateComers.map((r) => <Person key={r.id} r={r} right={`${r.late}× late`} />) : <Empty text="No late arrivals." />}</ul></Card>
-            <Card title={`Overdue homework (${overdue.length})`}><ul className="text-sm">{overdue.slice(0, 6).map((h) => <li key={h.id} className="flex justify-between gap-2"><span className="truncate">{h.title}</span><span className="text-xs text-destructive">{h.due_date}</span></li>)}</ul></Card>
+            <Card title="Top performers"><ul className="text-sm">{top.map((r) => <Person key={r.id} r={r} tone="good" right={`${r.avg}%`} />)}</ul></Card>
+            <Card title="Behaviour"><p className="mb-2 text-sm"><span className="text-success">+{(d?.beh ?? []).filter((b) => b.is_positive).length} merits</span> · <span className="text-destructive">−{(d?.beh ?? []).filter((b) => !b.is_positive).length} concerns</span></p>
+              <p className="text-xs text-muted-foreground">Common offences</p><ul className="mb-2 text-sm">{offences.map(([k, v]) => <li key={k} className="flex justify-between"><span>{k}</span><span className="text-destructive">{v}</span></li>)}</ul>
+              <p className="text-xs text-muted-foreground">Most concerns</p><ul className="text-sm">{offenders.map((r) => <Person key={r.id} r={r} tone="bad" right={`−${r.neg} concern${r.neg === 1 ? "" : "s"}`} />)}</ul></Card>
+            <Card title="Most late arrivals"><ul className="text-sm">{lateComers.length ? lateComers.map((r) => <Person key={r.id} r={r} tone={r.late >= 3 ? "bad" : "warn"} right={`${r.late}× late`} />) : <Empty text="No late arrivals." />}</ul></Card>
+            <Card title={`Overdue homework (${overdue.length})`}><ul className="space-y-3 text-sm">{overdue.length ? overdue.slice(0, 6).map((h) => { const m = missing(h.id); return (
+              <li key={h.id}><div className="flex justify-between gap-2"><span className="truncate font-medium">{h.title}</span><span className="shrink-0 text-xs text-destructive">due {h.due_date}</span></div>
+                <p className="text-xs text-muted-foreground">{doneQ.isLoading ? "Checking…" : m.length ? `Not handed in (${m.length}):` : "Everyone handed in."}</p>
+                {m.length > 0 && <div className="mt-1 flex max-h-28 flex-wrap gap-1 overflow-y-auto">{m.map((r) => <button key={r.id} onClick={() => setStudentId(r.id)} className="rounded border border-destructive/40 px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10">{r.first_name} {r.last_name}</button>)}</div>}
+              </li>); }) : <Empty text="No overdue homework." />}</ul></Card>
             <Card title="Register for a date">
               <Input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} />
               {dayQ.data && !dayQ.data.length ? <Empty text="No register for this date (weekend, holiday or not yet marked)." /> : (
