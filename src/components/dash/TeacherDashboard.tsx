@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ClassGlance } from "./ClassGlance";
 
 type Status = Database["public"]["Enums"]["attendance_status"];
-type Assign = { class_id: string; subject_id: string; classes: { name: string } | null; subjects: { name: string } | null };
+type Assign = { class_id: string; subject_id: string; classes: { name: string; grade: string } | null; subjects: { name: string } | null };
 const STATUSES: Status[] = ["present", "absent", "late", "excused"];
 
 export function TeacherDashboard() {
@@ -27,8 +27,8 @@ export function TeacherDashboard() {
     queryKey: ["assigns", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await supabase.from("class_subject_teachers").select("class_id, subject_id, classes(name), subjects(name)").eq("teacher_id", user!.id);
-      return (data ?? []) as unknown as Assign[];
+      const { data } = await supabase.from("class_subject_teachers").select("class_id, subject_id, classes(name, grade), subjects(name)").eq("teacher_id", user!.id);
+      return ((data ?? []) as unknown as Assign[]).sort((a, b) => Number(a.classes?.grade) - Number(b.classes?.grade) || (a.classes?.name ?? "").localeCompare(b.classes?.name ?? ""));
     },
   });
   const list = assigns.data ?? [];
@@ -116,12 +116,16 @@ export function TeacherDashboard() {
 
   return (
     <Shell title="Teacher dashboard" subtitle={cur ? `${cur.classes?.name} · ${cur.subjects?.name}` : ""} lastUpdate={lastUpdate}>
-      <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-        {list.map((a, i) => (
-          <Button key={a.class_id + a.subject_id} size="sm" className="shrink-0" variant={i === idx ? "default" : "outline"} onClick={() => setIdx(i)}>
-            {a.classes?.name} · {a.subjects?.name}
-          </Button>
-        ))}
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end">
+        <label className="text-xs text-muted-foreground sm:w-40">Grade
+          <select className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={cur?.classes?.grade ?? ""}
+            onChange={(e) => { const i = list.findIndex((a) => a.classes?.grade === e.target.value); if (i >= 0) setIdx(i); }}>
+            {[...new Set(list.map((a) => a.classes?.grade ?? ""))].sort((a, b) => Number(a) - Number(b)).map((g) => <option key={g} value={g}>Grade {g}</option>)}
+          </select></label>
+        <label className="flex-1 text-xs text-muted-foreground">Class · subject
+          <select className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={idx} onChange={(e) => setIdx(Number(e.target.value))}>
+            {list.map((a, i) => a.classes?.grade === cur?.classes?.grade && <option key={a.class_id + a.subject_id} value={i}>{a.classes?.name} · {a.subjects?.name}</option>)}
+          </select></label>
         {cur && <Button size="sm" variant="secondary" className="shrink-0" onClick={() => setGlance(!glance)}>{glance ? "Back to marking" : "Class at a glance"}</Button>}
       </div>
       {glance && cur ? <ClassGlance classId={cur.class_id} className={cur.classes?.name ?? "Class"} /> : <>
