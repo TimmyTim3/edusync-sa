@@ -92,37 +92,40 @@ export async function runSeedPhase(supabaseAdmin: SupabaseClient<Database>, data
         password: principal.password,
       });
 
-      const { data: classes } = await supabaseAdmin
+      const { data: allClasses } = await supabaseAdmin
         .from("classes")
-        .select("id, name")
+        .select("id, name, grade")
         .eq("school_id", schoolId)
-        .order("name")
-        .limit(4);
+        .order("name");
       const { data: subjects } = await supabaseAdmin
         .from("subjects")
         .select("id, name")
         .eq("school_id", schoolId);
+      const byGrade = new Map<string, { id: string; name: string; grade: string }[]>();
+      for (const c of allClasses ?? []) byGrade.set(c.grade, [...(byGrade.get(c.grade) ?? []), c]);
+      const gradeKeys = [...byGrade.keys()].sort((a, b) => Number(a) - Number(b) || a.localeCompare(b));
 
       const teacherSpecs = [
         { local: "maths.head", name: "Mr Sipho Dlamini", subject: "Mathematics" },
         { local: "teacher1", name: "Mrs Lerato Mokoena", subject: "English" },
         { local: "teacher2", name: "Mr Kyle Petersen", subject: "Physical Sciences" },
       ];
-      for (const spec of teacherSpecs) {
+      for (const [ti, spec] of teacherSpecs.entries()) {
         const t = await makeUser(spec.local, spec.name);
         await linkUser(t, "teacher");
-        // Each named teacher is the official class teacher (register owner) of one class.
-        const ownClass = classes?.[teacherSpecs.indexOf(spec)];
+        // Teaches one class in EVERY grade (different section per teacher).
+        const classes = gradeKeys.map((g) => { const list = byGrade.get(g)!; return list[ti % list.length]; });
+        // Register owner of one class, each teacher in a different grade.
+        const ownClass = byGrade.get(gradeKeys[(ti * 2) % Math.max(gradeKeys.length, 1)])?.[ti];
         if (ownClass) await supabaseAdmin.from("classes").update({ class_teacher_id: t.id }).eq("id", ownClass.id);
+        if (ownClass && !classes.some((c) => c.id === ownClass.id)) classes.push(ownClass);
         const subject = (subjects ?? []).find((s) => s.name === spec.subject) ?? (subjects ?? [])[0];
-        if (subject && classes?.length) {
-          for (const c of classes) {
-            await supabaseAdmin
-              .from("class_subject_teachers")
-              .delete()
-              .eq("class_id", c.id)
-              .eq("subject_id", subject.id);
-          }
+        if (subject && classes.length) {
+          await supabaseAdmin
+            .from("class_subject_teachers")
+            .delete()
+            .eq("subject_id", subject.id)
+            .in("class_id", classes.map((c) => c.id));
           await supabaseAdmin.from("class_subject_teachers").insert(
             classes.map((c) => ({
               school_id: sid,
@@ -132,6 +135,7 @@ export async function runSeedPhase(supabaseAdmin: SupabaseClient<Database>, data
             })),
           );
         }
+
         credentials.push({
           role: `Teacher — ${spec.subject}`,
           label: spec.name,
