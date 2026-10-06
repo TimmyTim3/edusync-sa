@@ -75,15 +75,32 @@ export function ClassGlance({ classId, className, onClose }: { classId: string; 
   const classAvg = rows.filter((r) => r.avg != null).length ? Math.round(rows.reduce((t, r) => t + (r.avg ?? 0), 0) / rows.filter((r) => r.avg != null).length) : 0;
   const offences = Object.entries((d?.beh ?? []).filter((b) => !b.is_positive).reduce<Record<string, number>>((acc, b) => ({ ...acc, [b.category]: (acc[b.category] ?? 0) + 1 }), {})).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const overdue = (d?.hw ?? []).filter((h) => h.due_date < today());
+  const doneQ = useQuery({
+    queryKey: ["class-hw-done", classId, overdue.map((h) => h.id).join(",")],
+    enabled: overdue.length > 0,
+    queryFn: async () => (await supabase.from("homework_completions").select("homework_id, student_id").in("homework_id", overdue.slice(0, 6).map((h) => h.id))).data ?? [],
+  });
+  const missing = (hwId: string) => {
+    const done = new Set((doneQ.data ?? []).filter((c) => c.homework_id === hwId).map((c) => c.student_id));
+    return rows.filter((r) => !done.has(r.id));
+  };
   const dayMap = new Map((dayQ.data ?? []).map((r) => [r.student_id, r.status]));
-  const dot = (r: (typeof rows)[number]) => (r.flags.length >= 2 ? "bg-destructive" : r.flags.length ? "bg-warning" : "bg-success");
+  type Tone = "good" | "warn" | "bad";
+  const health = (r: (typeof rows)[number]): Tone => (r.flags.length >= 2 ? "bad" : r.flags.length ? "warn" : "good");
+  const TONE: Record<Tone, string> = { good: "bg-success", warn: "bg-warning", bad: "bg-destructive" };
+  const TEXT: Record<Tone, string> = { good: "text-success", warn: "text-warning", bad: "text-destructive" };
   const selected = rows.find((r) => r.id === studentId);
 
-  const Person = ({ r, right }: { r: (typeof rows)[number]; right: string }) => (
-    <li><button className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-muted" onClick={() => setStudentId(r.id)}>
-      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot(r)}`} /><span className="flex-1 truncate">{r.first_name} {r.last_name}</span><span className="shrink-0 text-xs text-muted-foreground">{right}</span>
-    </button></li>
-  );
+  // Each list sets its own tone so the dot always matches what the list is about:
+  // top performers = green, late arrivals = amber/red, concerns = red.
+  const Person = ({ r, right, tone }: { r: (typeof rows)[number]; right: string; tone?: Tone }) => {
+    const t = tone ?? health(r);
+    return (
+      <li><button className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-muted" onClick={() => setStudentId(r.id)}>
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${TONE[t]}`} /><span className="flex-1 truncate">{r.first_name} {r.last_name}</span><span className={`shrink-0 text-xs ${tone ? TEXT[t] : "text-muted-foreground"}`}>{right}</span>
+      </button></li>
+    );
+  };
 
   return (
     <div className="space-y-4">
