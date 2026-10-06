@@ -114,9 +114,9 @@ export async function runSeedPhase(supabaseAdmin: SupabaseClient<Database>, data
         const t = await makeUser(spec.local, spec.name);
         await linkUser(t, "teacher");
         // Teaches one class in EVERY grade (different section per teacher).
-        const classes = gradeKeys.map((g) => { const list = byGrade.get(g)!; return list[ti % list.length]; });
+        const classes = gradeKeys.map((g) => { const list = byGrade.get(g)!; return list[ti % list.length]!; });
         // Register owner of one class, each teacher in a different grade.
-        const ownClass = byGrade.get(gradeKeys[(ti * 2) % Math.max(gradeKeys.length, 1)])?.[ti];
+        const ownClass = byGrade.get(gradeKeys[(ti * 2) % Math.max(gradeKeys.length, 1)] ?? "")?.[ti];
         if (ownClass) await supabaseAdmin.from("classes").update({ class_teacher_id: t.id }).eq("id", ownClass.id);
         if (ownClass && !classes.some((c) => c.id === ownClass.id)) classes.push(ownClass);
         const subject = (subjects ?? []).find((s) => s.name === spec.subject) ?? (subjects ?? [])[0];
