@@ -119,12 +119,16 @@ export function ClassGlance({ classId, className, onClose }: { classId: string; 
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <Card title={`Needing attention (${needing.length})`}><ul className="max-h-72 overflow-y-auto text-sm">{needing.length ? needing.map((r) => <Person key={r.id} r={r} right={r.flags.join(", ")} />) : <Empty text="Everyone is on track." />}</ul></Card>
-            <Card title="Top performers"><ul className="text-sm">{top.map((r) => <Person key={r.id} r={r} right={`${r.avg}%`} />)}</ul></Card>
-            <Card title="Behaviour"><p className="mb-2 text-sm"><span className="text-success">+{(d?.beh ?? []).filter((b) => b.is_positive).length} merits</span> · <span className="text-destructive">{(d?.beh ?? []).filter((b) => !b.is_positive).length} concerns</span></p>
-              <p className="text-xs text-muted-foreground">Common offences</p><ul className="mb-2 text-sm">{offences.map(([k, v]) => <li key={k} className="flex justify-between"><span>{k}</span><span>{v}</span></li>)}</ul>
-              <p className="text-xs text-muted-foreground">Most concerns</p><ul className="text-sm">{offenders.map((r) => <Person key={r.id} r={r} right={`${r.neg}`} />)}</ul></Card>
-            <Card title="Most late arrivals"><ul className="text-sm">{lateComers.length ? lateComers.map((r) => <Person key={r.id} r={r} right={`${r.late}× late`} />) : <Empty text="No late arrivals." />}</ul></Card>
-            <Card title={`Overdue homework (${overdue.length})`}><ul className="text-sm">{overdue.slice(0, 6).map((h) => <li key={h.id} className="flex justify-between gap-2"><span className="truncate">{h.title}</span><span className="text-xs text-destructive">{h.due_date}</span></li>)}</ul></Card>
+            <Card title="Top performers"><ul className="text-sm">{top.map((r) => <Person key={r.id} r={r} tone="good" right={`${r.avg}%`} />)}</ul></Card>
+            <Card title="Behaviour"><p className="mb-2 text-sm"><span className="text-success">+{(d?.beh ?? []).filter((b) => b.is_positive).length} merits</span> · <span className="text-destructive">−{(d?.beh ?? []).filter((b) => !b.is_positive).length} concerns</span></p>
+              <p className="text-xs text-muted-foreground">Common offences</p><ul className="mb-2 text-sm">{offences.map(([k, v]) => <li key={k} className="flex justify-between"><span>{k}</span><span className="text-destructive">{v}</span></li>)}</ul>
+              <p className="text-xs text-muted-foreground">Most concerns</p><ul className="text-sm">{offenders.map((r) => <Person key={r.id} r={r} tone="bad" right={`−${r.neg} concern${r.neg === 1 ? "" : "s"}`} />)}</ul></Card>
+            <Card title="Most late arrivals"><ul className="text-sm">{lateComers.length ? lateComers.map((r) => <Person key={r.id} r={r} tone={r.late >= 3 ? "bad" : "warn"} right={`${r.late}× late`} />) : <Empty text="No late arrivals." />}</ul></Card>
+            <Card title={`Overdue homework (${overdue.length})`}><ul className="space-y-3 text-sm">{overdue.length ? overdue.slice(0, 6).map((h) => { const m = missing(h.id); return (
+              <li key={h.id}><div className="flex justify-between gap-2"><span className="truncate font-medium">{h.title}</span><span className="shrink-0 text-xs text-destructive">due {h.due_date}</span></div>
+                <p className="text-xs text-muted-foreground">{doneQ.isLoading ? "Checking…" : m.length ? `Not handed in (${m.length}):` : "Everyone handed in."}</p>
+                {m.length > 0 && <div className="mt-1 flex max-h-28 flex-wrap gap-1 overflow-y-auto">{m.map((r) => <button key={r.id} onClick={() => setStudentId(r.id)} className="rounded border border-destructive/40 px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10">{r.first_name} {r.last_name}</button>)}</div>}
+              </li>); }) : <Empty text="No overdue homework." />}</ul></Card>
             <Card title="Register for a date">
               <Input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} />
               {dayQ.data && !dayQ.data.length ? <Empty text="No register for this date (weekend, holiday or not yet marked)." /> : (
