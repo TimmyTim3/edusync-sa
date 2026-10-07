@@ -110,6 +110,7 @@ export async function runSeedPhase(supabaseAdmin: SupabaseClient<Database>, data
         { local: "teacher1", name: "Mrs Lerato Mokoena", subject: "English" },
         { local: "teacher2", name: "Mr Kyle Petersen", subject: "Physical Sciences" },
       ];
+      const ownClassIds: string[] = [];
       for (const [ti, spec] of teacherSpecs.entries()) {
         const t = await makeUser(spec.local, spec.name);
         await linkUser(t, "teacher");
@@ -117,7 +118,7 @@ export async function runSeedPhase(supabaseAdmin: SupabaseClient<Database>, data
         const classes = gradeKeys.map((g) => { const list = byGrade.get(g)!; return list[ti % list.length]!; });
         // Register owner of one class, each teacher in a different grade.
         const ownClass = byGrade.get(gradeKeys[(ti * 2) % Math.max(gradeKeys.length, 1)] ?? "")?.[ti];
-        if (ownClass) await supabaseAdmin.from("classes").update({ class_teacher_id: t.id }).eq("id", ownClass.id);
+        if (ownClass) { ownClassIds.push(ownClass.id); await supabaseAdmin.from("classes").update({ class_teacher_id: t.id }).eq("id", ownClass.id); }
         if (ownClass && !classes.some((c) => c.id === ownClass.id)) classes.push(ownClass);
         const subject = (subjects ?? []).find((s) => s.name === spec.subject) ?? (subjects ?? [])[0];
         if (subject && classes.length) {
@@ -182,6 +183,54 @@ export async function runSeedPhase(supabaseAdmin: SupabaseClient<Database>, data
         });
         i += 1;
       }
+
+      // Starred presentation parents: their children sit in the demo teachers' own
+      // register classes, so a teacher can mark them live during a pitch.
+      const { data: pool } = await supabaseAdmin
+        .from("students")
+        .select("id, first_name, class_id")
+        .eq("school_id", sid)
+        .in("class_id", ownClassIds.length ? ownClassIds : ["00000000-0000-0000-0000-000000000000"])
+        .order("admission_no")
+        .limit(60);
+      const byClass = ownClassIds.map((c) => (pool ?? []).filter((s) => s.class_id === c));
+      const picked: { id: string; first_name: string }[] = [];
+      for (let r = 0; picked.length < 10 && r < 20; r++)
+        for (const list of byClass) { const s = list[r]; if (s && picked.length < 10) picked.push(s); }
+      const starSpecs = [
+        { n: 4, local: "star.parent4", first: "Nomvula", surname: "Sithole" },
+        { n: 3, local: "star.parent3", first: "Thandi", surname: "Mahlangu" },
+        { n: 2, local: "star.parent2", first: "Busisiwe", surname: "Ndlovu" },
+        { n: 1, local: "star.parent1", first: "Zanele", surname: "Mthembu" },
+      ];
+      const starCreds: typeof credentials = [];
+      let cursor = 0;
+      for (const spec of starSpecs) {
+        const kids = picked.slice(cursor, cursor + spec.n);
+        cursor += spec.n;
+        if (!kids.length) continue;
+        const name = `⭐ ${spec.first} ${spec.surname}`;
+        const p = await makeUser(spec.local, name);
+        await linkUser(p, "parent");
+        const { data: parentRow, error: pErr } = await supabaseAdmin
+          .from("parents")
+          .insert({ school_id: sid, full_name: name, email: p.email, phone: "+27820000000", user_id: p.id })
+          .select("id")
+          .single();
+        if (pErr || !parentRow) throw new Error(pErr?.message ?? "Could not create presentation parent");
+        await supabaseAdmin.from("parent_student").insert(
+          kids.map((k) => ({ school_id: sid, parent_id: parentRow.id, student_id: k.id, relationship: "Mother", is_primary: true })),
+        );
+        for (const k of kids)
+          await supabaseAdmin.from("students").update({ first_name: `⭐ ${k.first_name.replace(/^⭐\s*/, "")}`, last_name: spec.surname }).eq("id", k.id);
+        starCreds.push({
+          role: `⭐ Presentation parent — ${kids.length} ${kids.length === 1 ? "child" : "children"}`,
+          label: name,
+          email: p.email,
+          password: p.password,
+        });
+      }
+      credentials.splice(0, 0, ...starCreds);
 
       const count = async (table: "attendance_records" | "marks") => {
         const { count: n } = await supabaseAdmin.from(table).select("id", { count: "exact", head: true }).eq("school_id", sid);
