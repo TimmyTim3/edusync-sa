@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { clearDemoData, platformStats, seedDemoSchool, type Credential } from "@/lib/master.functions";
+import { LearnerImport } from "@/components/LearnerImport";
 import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/master")({
@@ -140,8 +141,9 @@ function Master() {
         </div>
         <Tabs defaultValue="demo" className="space-y-6">
           <TabsList className="h-auto flex-wrap justify-start gap-1 bg-muted p-1">
-            <TabsTrigger value="demo">Demo data</TabsTrigger><TabsTrigger value="features">Features</TabsTrigger><TabsTrigger value="schools">Schools</TabsTrigger><TabsTrigger value="plans">Plans</TabsTrigger><TabsTrigger value="branding">Branding</TabsTrigger>
+            <TabsTrigger value="demo">Demo data</TabsTrigger><TabsTrigger value="import">Import learners</TabsTrigger><TabsTrigger value="features">Features</TabsTrigger><TabsTrigger value="schools">Schools</TabsTrigger><TabsTrigger value="plans">Plans</TabsTrigger><TabsTrigger value="branding">Branding</TabsTrigger>
           </TabsList>
+          <TabsContent value="import"><LearnerImport schools={(schools.data ?? []).map((s) => ({ id: s.id, name: s.name }))} /></TabsContent>
           <TabsContent value="demo" className="space-y-6">
             <section className="border-b pb-6"><h2 className="font-display text-xl font-semibold">Demo schools</h2><p className="mt-1 text-sm text-muted-foreground">Generate a complete school and use the accounts below to explore each dashboard.</p>
               <div className="mt-5 flex flex-wrap gap-2"><Button disabled={busy} onClick={() => void run("large")}>{busy ? "Generating school…" : "Seed full demo school · 3,220 learners"}</Button><Button variant="outline" disabled={busy} onClick={() => void run("small")}>Seed smaller school · 600 learners</Button><Button variant="destructive" disabled={busy} onClick={async () => { if (!window.confirm("Delete all demo schools and their login accounts? This cannot be undone.")) return; setBusy(true); try { const result = await clear(); setCredentials([]); setSummary(null); done(`${result.removed} demo schools removed`); } catch (error) { fail(error); } finally { setBusy(false); } }}>Clear all demo data</Button></div>
