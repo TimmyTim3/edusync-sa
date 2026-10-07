@@ -15,6 +15,8 @@ import { ClassGlance } from "./ClassGlance";
 type Status = Database["public"]["Enums"]["attendance_status"];
 type Assign = { class_id: string; subject_id: string; classes: { name: string; grade: string } | null; subjects: { name: string } | null };
 const STATUSES: Status[] = ["present", "absent", "late", "excused"];
+const gradeNum = (g: string) => (/^r$/i.test(g) ? 0 : Number(g) || 99);
+const gradeLabel = (g: string) => (/^grade/i.test(g) ? g : `Grade ${g.toUpperCase()}`);
 
 export function TeacherDashboard() {
   const { user, schoolId } = useAuth();
@@ -35,6 +37,17 @@ export function TeacherDashboard() {
   const [idx, setIdx] = useState(0);
   const [glance, setGlance] = useState(false);
   const cur = list[idx];
+  const [browse, setBrowse] = useState(false);
+  const [browseGrade, setBrowseGrade] = useState("");
+  const [browseClass, setBrowseClass] = useState("");
+  const allClasses = useQuery({
+    queryKey: ["all-classes", schoolId],
+    enabled: !!schoolId,
+    queryFn: async () => {
+      const { data } = await supabase.from("classes").select("id, name, grade").eq("school_id", schoolId!).order("name");
+      return data ?? [];
+    },
+  });
 
   const students = useQuery({
     queryKey: ["class-students", cur?.class_id],
@@ -108,19 +121,48 @@ export function TeacherDashboard() {
     setBeh({ student: "", note: "", positive: true });
   };
 
-  if (!assigns.isLoading && !list.length)
-    return <Shell title="Teacher dashboard" lastUpdate={lastUpdate}><Card><Empty text="You have no classes assigned yet." /></Card></Shell>;
-
   const st = students.data?.students ?? [];
   const present = st.filter((s) => (marks[s.id] ?? "present") === "present").length;
 
+  const schoolPicker = (
+    <div className="mb-4 flex flex-wrap gap-2">
+      <Button size="sm" variant={!browse ? "default" : "outline"} onClick={() => setBrowse(false)} disabled={!list.length}>My classes</Button>
+      <Button size="sm" variant={browse ? "default" : "outline"} onClick={() => setBrowse(true)}>Whole school · all grades</Button>
+    </div>
+  );
+
+  if (browse || (!assigns.isLoading && !list.length)) {
+    const all = allClasses.data ?? [];
+    const grades = [...new Set(all.map((c) => c.grade))].sort((a, b) => gradeNum(a) - gradeNum(b));
+    const g = browseGrade || grades[0] || "";
+    const inGrade = all.filter((c) => c.grade === g);
+    const cls = inGrade.find((c) => c.id === browseClass) ?? inGrade[0];
+    return (
+      <Shell title="Teacher dashboard" subtitle="Browse any grade and class" lastUpdate={lastUpdate}>
+        {schoolPicker}
+        <div className="mb-6 grid gap-2 sm:grid-cols-2">
+          <label className="text-xs text-muted-foreground">Grade
+            <select className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={g} onChange={(e) => { setBrowseGrade(e.target.value); setBrowseClass(""); }}>
+              {grades.map((x) => <option key={x} value={x}>{gradeLabel(x)}</option>)}
+            </select></label>
+          <label className="text-xs text-muted-foreground">Class
+            <select className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={cls?.id ?? ""} onChange={(e) => setBrowseClass(e.target.value)}>
+              {inGrade.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select></label>
+        </div>
+        {cls ? <ClassGlance classId={cls.id} className={cls.name} /> : <Card><Empty text="No classes found for this school yet." /></Card>}
+      </Shell>
+    );
+  }
+
   return (
     <Shell title="Teacher dashboard" subtitle={cur ? `${cur.classes?.name} · ${cur.subjects?.name}` : ""} lastUpdate={lastUpdate}>
+      {schoolPicker}
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end">
         <label className="text-xs text-muted-foreground sm:w-40">Grade
           <select className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={cur?.classes?.grade ?? ""}
             onChange={(e) => { const i = list.findIndex((a) => a.classes?.grade === e.target.value); if (i >= 0) setIdx(i); }}>
-            {[...new Set(list.map((a) => a.classes?.grade ?? ""))].sort((a, b) => Number(a) - Number(b)).map((g) => <option key={g} value={g}>Grade {g}</option>)}
+            {[...new Set(list.map((a) => a.classes?.grade ?? ""))].sort((a, b) => gradeNum(a) - gradeNum(b)).map((g) => <option key={g} value={g}>{gradeLabel(g)}</option>)}
           </select></label>
         <label className="flex-1 text-xs text-muted-foreground">Class · subject
           <select className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={idx} onChange={(e) => setIdx(Number(e.target.value))}>
