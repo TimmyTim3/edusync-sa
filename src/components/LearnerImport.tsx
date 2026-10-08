@@ -57,7 +57,7 @@ function mapRows(mode: Mode, raw: Raw[]): { rows: Raw[]; skipped: number; missin
   for (const r of raw) {
     const o: Raw = {};
     for (const f of Object.keys(col)) o[f] = col[f] ? String(r[col[f]!] ?? "").trim() : "";
-    if (mode !== "learners" || true) { if (col["date"]) o["date"] = toISODate(r[col["date"]!]); if (col["date_of_birth"]) o["date_of_birth"] = toISODate(r[col["date_of_birth"]!]); }
+    { if (col["date"]) o["date"] = toISODate(r[col["date"]!]); if (col["date_of_birth"]) o["date_of_birth"] = toISODate(r[col["date_of_birth"]!]); }
     if (mode === "learners" && o["first_name"] && !o["last_name"] && String(o["first_name"]).includes(" ")) {
       const p = String(o["first_name"]).split(" "); o["last_name"] = p.pop(); o["first_name"] = p.join(" ");
     }
