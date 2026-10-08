@@ -137,6 +137,7 @@ export const importAttendanceHistory = createServerFn({ method: "POST" })
       if (!s.class_id) return issues.push({ row: i + 2, admission_no: r.admission_no, reason: "Learner has no class" });
       if (!status) return issues.push({ row: i + 2, admission_no: r.admission_no, reason: `Unknown status "${r.status}"` });
       recs.set(`${s.id}|${r.date}`, { school_id: data.schoolId, student_id: s.id, class_id: s.class_id, date: r.date, status, note: r.reason || null });
+      return 0;
     });
     const all = [...recs.values()];
     for (let i = 0; i < all.length; i += 500) {

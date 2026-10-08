@@ -1,6 +1,6 @@
 # Current work
 - [ ] Fix full demo seeding timeout and verify 3,220 learners with usable accounts.
-- [ ] Add secure multi-format learner import in Master Control Centre.
+- [x] Bundle 1: learner + parent linking import, past attendance and behaviour importers.
 - [ ] Add disciplinary analytics, filters, archive and PDF/CSV exports, plus teacher behaviour notebook.
 - [ ] Restrict attendance writes to class teacher; allow audited principal overrides, class assignment and dated history.
 - [ ] Add class-at-a-glance views and student drilldown for teacher and principal.
