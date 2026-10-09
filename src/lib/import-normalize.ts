@@ -31,3 +31,17 @@ export function toISODate(v: unknown): string {
   const m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
   return m ? `${m[3]}-${m[2]!.padStart(2, "0")}-${m[1]!.padStart(2, "0")}` : "";
 }
+
+/** SASA-style behaviour levels: 1 = minor … 5 = most serious / exceptional. */
+export const SASA_LEVELS = [
+  { level: 1, points: 5, severity: "low", merit: "Level 1 · Good effort", demerit: "Level 1 · Minor (e.g. late, no homework)" },
+  { level: 2, points: 10, severity: "low", merit: "Level 2 · Commendable", demerit: "Level 2 · Repeated minor / disruption" },
+  { level: 3, points: 15, severity: "medium", merit: "Level 3 · Outstanding", demerit: "Level 3 · Serious (e.g. defiance, bunking)" },
+  { level: 4, points: 20, severity: "high", merit: "Level 4 · Excellence award", demerit: "Level 4 · Very serious (e.g. fighting, theft)" },
+  { level: 5, points: 25, severity: "high", merit: "Level 5 · Exceptional honour", demerit: "Level 5 · Gross misconduct (SGB hearing)" },
+] as const;
+
+export function levelPoints(level: number, positive: boolean): number {
+  const l = SASA_LEVELS[Math.min(5, Math.max(1, Math.round(level))) - 1]!;
+  return positive ? l.points : -l.points;
+}
