@@ -1,3 +1,4 @@
+import { SASA_LEVELS, levelPoints } from "@/lib/import-normalize";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -112,13 +113,13 @@ export function TeacherDashboard() {
     setAssess(""); setScores({});
   };
 
-  const [beh, setBeh] = useState({ student: "", note: "", positive: true });
+  const [beh, setBeh] = useState({ student: "", note: "", positive: true, level: 1 });
   const addBehaviour = async () => {
     if (!schoolId || !beh.student || !beh.note || !on("behaviour")) return;
-    const { error } = await supabase.from("behaviour_notes").insert({ school_id: schoolId, student_id: beh.student, category: beh.positive ? "Merit" : "Concern", is_positive: beh.positive, severity: "low", note: beh.note, points: beh.positive ? 5 : -5, parent_visible: true, created_by: user!.id });
+    const { error } = await supabase.from("behaviour_notes").insert({ school_id: schoolId, student_id: beh.student, category: beh.positive ? "Merit" : "Concern", is_positive: beh.positive, severity: SASA_LEVELS[beh.level - 1]!.severity, note: beh.note, points: levelPoints(beh.level, beh.positive), parent_visible: true, created_by: user!.id });
     if (error) { toast.error(error.message); return; }
     toast.success("Behaviour note shared");
-    setBeh({ student: "", note: "", positive: true });
+    setBeh({ student: "", note: "", positive: true, level: 1 });
   };
 
   const st = students.data?.students ?? [];
@@ -219,9 +220,12 @@ export function TeacherDashboard() {
                 {st.map((s) => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
               </select>
               <div className="flex gap-2">
-                <Button size="sm" variant={beh.positive ? "default" : "outline"} className={beh.positive ? "bg-success text-success-foreground hover:bg-success/90" : ""} onClick={() => setBeh({ ...beh, positive: true })}>Merit +5</Button>
-                <Button size="sm" variant={!beh.positive ? "destructive" : "outline"} onClick={() => setBeh({ ...beh, positive: false })}>Concern −5</Button>
+                <Button size="sm" variant={beh.positive ? "default" : "outline"} className={beh.positive ? "bg-success text-success-foreground hover:bg-success/90" : ""} onClick={() => setBeh({ ...beh, positive: true })}>Merit</Button>
+                <Button size="sm" variant={!beh.positive ? "destructive" : "outline"} onClick={() => setBeh({ ...beh, positive: false })}>Concern</Button>
               </div>
+              <select aria-label="SASA level" className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={beh.level} onChange={(e) => setBeh({ ...beh, level: Number(e.target.value) })}>
+                {SASA_LEVELS.map((l) => <option key={l.level} value={l.level}>{beh.positive ? l.merit : l.demerit} ({beh.positive ? "+" : "−"}{l.points})</option>)}
+              </select>
               <Textarea placeholder="Note visible to parents" value={beh.note} onChange={(e) => setBeh({ ...beh, note: e.target.value })} />
               <Button className="w-full" onClick={addBehaviour}>Share with parents</Button>
             </div>
