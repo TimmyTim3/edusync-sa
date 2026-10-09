@@ -7,7 +7,7 @@ import {
   importLearners, importAttendanceHistory, importBehaviourHistory,
   type ImportRow, type AttendanceRow, type BehaviourRow, type RowIssue,
 } from "@/lib/import.functions";
-import { toISODate } from "@/lib/import-normalize";
+import { toISODate, levelPoints } from "@/lib/import-normalize";
 
 type Mode = "learners" | "attendance" | "behaviour";
 type Raw = Record<string, unknown>;
@@ -47,13 +47,15 @@ const INFO: Record<Mode, { title: string; text: string }> = {
   behaviour: { title: "Past behaviour", text: "Needed: date, admission number, category, points (negative for demerits, positive for merits). Optional: severity (low/medium/serious or SASA level 1–5), notes, action taken. Imported notes are permanent and feed the disciplinary reports." },
 };
 
-function mapRows(mode: Mode, raw: Raw[]): { rows: Raw[]; skipped: number; missing: string[] } {
+const isComplete = (mode: Mode, o: Raw) => REQUIRED[mode].every((f) => o[f] !== "" && o[f] !== undefined && o[f] !== null);
+
+function mapRows(mode: Mode, raw: Raw[]): { rows: Raw[]; bad: Raw[]; missing: string[] } {
   const headers = Object.keys(raw[0] ?? {});
   const col: Record<string, string | undefined> = {};
   for (const f of Object.keys(ALIASES[mode])) col[f] = headers.find((h) => ALIASES[mode][f]!.includes(key(h)) || key(h) === f.replace(/_/g, " "));
   const missing = REQUIRED[mode].filter((f) => !col[f] && !(mode === "learners" && f === "last_name" && col["first_name"]));
   const rows: Raw[] = [];
-  let skipped = 0;
+  const bad: Raw[] = [];
   for (const r of raw) {
     const o: Raw = {};
     for (const f of Object.keys(col)) o[f] = col[f] ? String(r[col[f]!] ?? "").trim() : "";
@@ -61,10 +63,15 @@ function mapRows(mode: Mode, raw: Raw[]): { rows: Raw[]; skipped: number; missin
     if (mode === "learners" && o["first_name"] && !o["last_name"] && String(o["first_name"]).includes(" ")) {
       const p = String(o["first_name"]).split(" "); o["last_name"] = p.pop(); o["first_name"] = p.join(" ");
     }
-    if (mode === "behaviour") { const n = parseInt(String(o["points"]).replace(/[^\d-]/g, ""), 10); o["points"] = isNaN(n) ? "" : n; }
-    if (REQUIRED[mode].every((f) => o[f] !== "" && o[f] !== undefined)) rows.push(o); else skipped++;
+    if (mode === "behaviour") {
+      const n = parseInt(String(o["points"]).replace(/[^\d-]/g, ""), 10);
+      const lvl = Number(String(o["severity"]).replace(/\D/g, ""));
+      o["points"] = !isNaN(n) ? n : lvl >= 1 && lvl <= 5 ? levelPoints(lvl, /merit|commend|award/i.test(String(o["category"]))) : "";
+    }
+    if (Object.values(o).every((v) => v === "")) continue;
+    (isComplete(mode, o) ? rows : bad).push(o);
   }
-  return { rows, skipped, missing };
+  return { rows, bad, missing };
 }
 
 async function readFile(file: File): Promise<Raw[]> {
@@ -73,13 +80,60 @@ async function readFile(file: File): Promise<Raw[]> {
     const j = JSON.parse(await file.text());
     return Array.isArray(j) ? j : (j.learners ?? j.students ?? j.records ?? []);
   }
-  if (ext === "pdf") throw new Error("PDF files can't be read reliably. Open the PDF, export it as Excel or CSV, then import that file.");
+  if (ext === "docx") return tableToRows(await docxTable(file));
+  if (ext === "pdf") return tableToRows(await pdfTable(file));
   const XLSX = await import("xlsx");
   const wb = ["csv", "tsv", "txt"].includes(ext ?? "")
     ? XLSX.read(await file.text(), { type: "string", cellDates: true })
     : XLSX.read(await file.arrayBuffer(), { cellDates: true });
   const sheet = wb.Sheets[wb.SheetNames[0]!]!;
   return XLSX.utils.sheet_to_json<Raw>(sheet, { defval: "", raw: false, dateNF: "yyyy-mm-dd" });
+}
+
+function tableToRows(t: string[][]): Raw[] {
+  const hi = t.findIndex((r) => r.filter((c) => c.trim()).length >= 2);
+  if (hi < 0) throw new Error("No table found in this document.");
+  const head = t[hi]!.map((h, i) => h.trim() || `Column ${i + 1}`);
+  return t.slice(hi + 1).map((r) => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? "").trim()])));
+}
+
+async function docxTable(file: File): Promise<string[][]> {
+  const mammoth = await import("mammoth");
+  const { value } = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+  const doc = new DOMParser().parseFromString(value, "text/html");
+  const tables = [...doc.querySelectorAll("table")];
+  if (!tables.length) throw new Error("This Word document has no table. Put the learners in a Word table with a heading row.");
+  const best = tables.sort((a, b) => b.rows.length - a.rows.length)[0]!;
+  return [...best.rows].map((r) => [...r.cells].map((c) => c.textContent ?? ""));
+}
+
+async function pdfTable(file: File): Promise<string[][]> {
+  const pdfjs = await import("pdfjs-dist");
+  const worker = await import("pdfjs-dist/build/pdf.worker.min.mjs?url");
+  pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const out: string[][] = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const content = await (await pdf.getPage(p)).getTextContent();
+    const lines = new Map<number, { x: number; w: number; s: string }[]>();
+    for (const it of content.items as { str: string; transform: number[]; width: number }[]) {
+      if (!it.str.trim()) continue;
+      const y = Math.round(it.transform[5]! / 3) * 3;
+      (lines.get(y) ?? lines.set(y, []).get(y)!).push({ x: it.transform[4]!, w: it.width, s: it.str });
+    }
+    for (const y of [...lines.keys()].sort((a, b) => b - a)) {
+      const parts = lines.get(y)!.sort((a, b) => a.x - b.x);
+      const cells: string[] = [];
+      let lastEnd = -Infinity;
+      for (const t of parts) {
+        if (t.x - lastEnd > 8 || !cells.length) cells.push(t.s); else cells[cells.length - 1] += (t.x - lastEnd > 1 ? " " : "") + t.s;
+        lastEnd = t.x + t.w;
+      }
+      out.push(cells);
+    }
+  }
+  if (out.length > 1 && out[0]!.length < 2) throw new Error("Couldn't find table columns in this PDF. Export it as Excel or CSV instead.");
+  return out;
 }
 
 export function LearnerImport({ schools }: { schools: { id: string; name: string }[] }) {
@@ -89,12 +143,13 @@ export function LearnerImport({ schools }: { schools: { id: string; name: string
   const [mode, setMode] = useState<Mode>("learners");
   const [school, setSchool] = useState("");
   const [rows, setRows] = useState<Raw[]>([]);
-  const [skipped, setSkipped] = useState(0);
+  const [bad, setBad] = useState<Raw[]>([]);
+  const [bulk, setBulk] = useState({ field: "", value: "" });
   const [busy, setBusy] = useState(false);
   const [issues, setIssues] = useState<RowIssue[]>([]);
   const [result, setResult] = useState("");
 
-  const switchMode = (m: Mode) => { setMode(m); setRows([]); setIssues([]); setResult(""); setSkipped(0); };
+  const switchMode = (m: Mode) => { setMode(m); setRows([]); setIssues([]); setResult(""); setBad([]); };
 
   const onFile = async (f: File | undefined) => {
     if (!f) return;
@@ -102,8 +157,9 @@ export function LearnerImport({ schools }: { schools: { id: string; name: string
     try {
       const p = mapRows(mode, await readFile(f));
       if (p.missing.length) { setRows([]); toast.error(`Missing column(s): ${p.missing.join(", ").replace(/_/g, " ")}. Download the template to see the expected headings.`); return; }
-      setRows(p.rows); setSkipped(p.skipped);
-      if (!p.rows.length) toast.error("No usable rows found in this file.");
+      setRows(p.rows); setBad(p.bad);
+      if (!p.rows.length && !p.bad.length) toast.error("No usable rows found in this file.");
+      else if (p.bad.length) toast.warning(`${p.bad.length} rows need fixing before they can be imported.`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Could not read file"); }
   };
 
@@ -140,6 +196,18 @@ export function LearnerImport({ schools }: { schools: { id: string; name: string
   };
 
   const cols = Object.keys(ALIASES[mode]);
+  const req = REQUIRED[mode];
+  const editBad = (i: number, f: string, v: string) => setBad((b) => b.map((r, j) => (j === i ? { ...r, [f]: f === "points" ? (v === "" ? "" : Number(v)) : v } : r)));
+  const applyBulk = () => {
+    if (!bulk.field || !bulk.value) return;
+    setBad((b) => b.map((r) => (r[bulk.field] === "" || r[bulk.field] === undefined ? { ...r, [bulk.field]: bulk.field === "points" ? Number(bulk.value) : bulk.value } : r)));
+    toast.success("Filled every empty cell in that column");
+  };
+  const moveFixed = () => {
+    const ok = bad.filter((r) => isComplete(mode, r));
+    setRows((r) => [...r, ...ok]); setBad((b) => b.filter((r) => !isComplete(mode, r)));
+    toast.success(`${ok.length} fixed rows added to the import`);
+  };
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-2" role="tablist">
@@ -149,7 +217,7 @@ export function LearnerImport({ schools }: { schools: { id: string; name: string
       </div>
       <div>
         <h2 className="font-display text-xl font-semibold">Import {INFO[mode].title.toLowerCase()}</h2>
-        <p className="text-sm text-muted-foreground">{INFO[mode].text} Accepts Excel (.xlsx, .xls), SA-SAMS Excel exports, CSV, TSV, text, OpenDocument (.ods) or JSON. Dates may be 2026-05-12 or 12/05/2026.</p>
+        <p className="text-sm text-muted-foreground">{INFO[mode].text} Accepts Excel (.xlsx, .xls), SA-SAMS Excel exports, CSV, TSV, text, OpenDocument (.ods), Word tables (.docx), PDF tables or JSON. Dates may be 2026-05-12 or 12/05/2026.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <select aria-label="School to import into" className="h-10 rounded-md border bg-background px-2 text-sm" value={school} onChange={(e) => setSchool(e.target.value)}>
@@ -157,7 +225,7 @@ export function LearnerImport({ schools }: { schools: { id: string; name: string
         </select>
         <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed bg-card text-sm">
           <Upload className="h-4 w-4" /> Choose file
-          <input key={mode} type="file" className="sr-only" accept=".xlsx,.xls,.ods,.csv,.tsv,.txt,.json,.pdf" onChange={(e) => void onFile(e.target.files?.[0])} />
+          <input key={mode} type="file" className="sr-only" accept=".xlsx,.xls,.ods,.csv,.tsv,.txt,.json,.pdf,.docx" onChange={(e) => void onFile(e.target.files?.[0])} />
         </label>
         <Button variant="outline" onClick={download}><Download className="mr-2 h-4 w-4" />Download template</Button>
       </div>
@@ -168,8 +236,29 @@ export function LearnerImport({ schools }: { schools: { id: string; name: string
           <ul className="max-h-48 space-y-1 overflow-y-auto">{issues.map((x, i) => <li key={i}>Row {x.row} · {x.admission_no}: {x.reason}</li>)}</ul>
         </div>
       )}
+      {bad.length > 0 && (
+        <div className="space-y-3 rounded-md border border-warning/50 bg-warning/5 p-3">
+          <p className="text-sm font-medium">{bad.length} rows are missing required information. Fill in the highlighted boxes, then press "Add fixed rows".</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select aria-label="Column to fill" className="h-9 rounded-md border bg-background px-2 text-sm" value={bulk.field} onChange={(e) => setBulk({ ...bulk, field: e.target.value })}>
+              <option value="">Fill all empty…</option>{cols.map((c) => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
+            </select>
+            <input aria-label="Value for all empty cells" className="h-9 rounded-md border bg-background px-2 text-sm" placeholder="Value" value={bulk.value} onChange={(e) => setBulk({ ...bulk, value: e.target.value })} />
+            <Button size="sm" variant="outline" onClick={applyBulk}>Fill all</Button>
+            <Button size="sm" onClick={moveFixed}>Add fixed rows ({bad.filter((r) => isComplete(mode, r)).length})</Button>
+          </div>
+          <div className="max-h-96 overflow-auto rounded-md border bg-background"><table className="w-full min-w-[900px] text-left text-sm">
+            <thead className="sticky top-0 bg-muted text-muted-foreground"><tr>{cols.map((h) => <th key={h} className="p-2 capitalize">{h.replace(/_/g, " ")}{req.includes(h) ? " *" : ""}</th>)}</tr></thead>
+            <tbody>{bad.slice(0, 200).map((r, i) => <tr key={i} className="border-t">{cols.map((c) => {
+              const empty = req.includes(c) && (r[c] === "" || r[c] === undefined);
+              return <td key={c} className="p-1"><input aria-label={`${c} row ${i + 1}`} type={c === "date" || c === "date_of_birth" ? "date" : c === "points" ? "number" : "text"} className={`h-8 w-full min-w-[90px] rounded border bg-background px-1 ${empty ? "border-destructive ring-1 ring-destructive" : ""}`} value={String(r[c] ?? "")} onChange={(e) => editBad(i, c, e.target.value)} /></td>;
+            })}</tr>)}</tbody>
+          </table></div>
+          {bad.length > 200 && <p className="text-xs text-muted-foreground">Showing the first 200. Use "Fill all" for the rest, or fix the file and upload again.</p>}
+        </div>
+      )}
       {rows.length > 0 && <>
-        <p className="text-sm">{rows.length} rows ready{skipped ? ` · ${skipped} rows skipped (missing required values)` : ""}. Preview of the first 10:</p>
+        <p className="text-sm">{rows.length} rows ready{bad.length ? ` · ${bad.length} still need fixing (not included yet)` : ""}. Preview of the first 10:</p>
         <div className="overflow-x-auto rounded-md border"><table className="w-full min-w-[640px] text-left text-sm">
           <thead className="bg-muted text-muted-foreground"><tr>{cols.map((h) => <th key={h} className="p-2 capitalize">{h.replace(/_/g, " ")}</th>)}</tr></thead>
           <tbody>{rows.slice(0, 10).map((r, i) => <tr key={i} className="border-t">{cols.map((c) => <td key={c} className="p-2">{String(r[c] ?? "") || "—"}</td>)}</tr>)}</tbody>

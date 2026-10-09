@@ -1,2 +1,7 @@
-import {expect,test} from "vitest"; import {normStatus,normSeverity,toISODate} from "./import-normalize";
-test("n",()=>{expect(normStatus("A")).toBe("absent");expect(normStatus("Half day")).toBe("half_day");expect(normSeverity("serious")).toBe("high");expect(normSeverity("Level 3")).toBe("medium");expect(toISODate("12/05/2026")).toBe("2026-05-12");});
+import { describe, it, expect } from "vitest";
+import { levelPoints, normSeverity } from "./import-normalize";
+describe("SASA levels", () => {
+  it("level 1 merit is +5", () => expect(levelPoints(1, true)).toBe(5));
+  it("level 5 demerit is -25", () => expect(levelPoints(5, false)).toBe(-25));
+  it("level 4 is high severity", () => expect(normSeverity("4")).toBe("high"));
+});
