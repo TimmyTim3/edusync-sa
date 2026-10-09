@@ -17,7 +17,7 @@ type NoteRow = {
   note: string;
   points: number;
   created_at: string;
-  students: { id: string; first_name: string; last_name: string; class_id: string | null } | null;
+  students: { id: string; first_name: string; last_name: string; class_id: string | null; admission_no: string | null } | null;
 };
 
 type Counted = { label: string; count: number; extra?: string };
@@ -32,7 +32,10 @@ export type Snapshot = {
   categories: Counted[];
   trend: Counted[];
   serious: { student: string; category: string; severity: string; note: string; date: string }[];
+  register?: { date: string; admission: string; learner: string; grade: string; cls: string; type: string; category: string; level: string; points: number; note: string }[];
 };
+
+const LEVEL = (pts: number) => `Level ${Math.min(5, Math.max(1, Math.ceil(Math.abs(pts) / 5)))}`;
 
 const weekKey = (iso: string) => {
   const d = new Date(iso);
@@ -91,7 +94,7 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
       const classMap = new Map((classes.data ?? []).map((c) => [c.id, c]));
       let q = supabase
         .from("behaviour_notes")
-        .select("id, category, is_positive, severity, note, points, created_at, students(id, first_name, last_name, class_id)")
+        .select("id, category, is_positive, severity, note, points, created_at, students(id, first_name, last_name, class_id, admission_no)")
         .eq("school_id", schoolId)
         .gte("created_at", `${filters.from}T00:00:00Z`)
         .lte("created_at", `${filters.to}T23:59:59Z`)
@@ -132,6 +135,13 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
             note: r.note,
             date: r.created_at.slice(0, 10),
           })),
+        register: rows.map((r) => {
+          const c = r.students?.class_id ? classMap.get(r.students.class_id) : undefined;
+          return {
+            date: r.created_at.slice(0, 10), admission: r.students?.admission_no ?? "", learner: r.students ? `${r.students.last_name}, ${r.students.first_name}` : "Unknown",
+            grade: c?.grade ?? "", cls: c?.name ?? "", type: r.is_positive ? "Merit" : "Demerit", category: r.category, level: LEVEL(r.points), points: r.points, note: r.note,
+          };
+        }),
       };
       setSnapshot(snap);
       toast.success(`Report ready — ${rows.length} behaviour notes analysed`);
@@ -161,26 +171,23 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
     void qc.invalidateQueries({ queryKey: ["disc-archive", schoolId] });
   };
 
-  const csv = (snap: Snapshot, name: string) => {
-    const lines: string[] = [["Section", "Item", "Count"].join(",")];
-    const push = (section: string, items: Counted[]) =>
-      items.forEach((i) => lines.push([section, `"${i.label.replace(/"/g, '""')}"`, String(i.count)].join(",")));
-    lines.push(["Summary", "Total notes", String(snap.total)].join(","));
-    lines.push(["Summary", "Positive", String(snap.positive)].join(","));
-    lines.push(["Summary", "Negative", String(snap.negative)].join(","));
-    push("Frequent offenders", snap.offenders);
-    push("Classes", snap.classes);
-    push("Offence types", snap.categories);
-    push("Weekly trend", snap.trend);
-    snap.serious.forEach((s) =>
-      lines.push(["Serious incident", `"${s.date} ${s.student} — ${s.category}: ${s.note.replace(/"/g, '""')}"`, "1"].join(",")),
-    );
-    const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${name}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const csv = async (snap: Snapshot, name: string) => {
+    const XLSX = await import("xlsx");
+    const wb = XLSX.utils.book_new();
+    const head = [["DEPARTMENT OF BASIC EDUCATION — LEARNER DISCIPLINE REGISTER"], ["Code of Conduct report (SASA s.8)"], [`Period: ${name}`], [`Generated: ${new Date(snap.generated_at).toLocaleString("en-ZA")}`], []];
+    const summary = XLSX.utils.aoa_to_sheet([...head, ["Measure", "Total"], ["Behaviour entries", snap.total], ["Merits", snap.positive], ["Demerits", snap.negative], [], ["Principal signature:", ""], ["Date:", ""]]);
+    summary["!cols"] = [{ wch: 30 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, summary, "Summary");
+    const reg = XLSX.utils.aoa_to_sheet([...head, ["No.", "Date", "Admission No", "Learner (Surname, Name)", "Grade", "Class", "Type", "Offence / Merit", "SASA Level", "Points", "Description"],
+      ...(snap.register ?? []).map((r, i) => [i + 1, r.date, r.admission, r.learner, r.grade, r.cls, r.type, r.category, r.level, r.points, r.note])]);
+    reg["!cols"] = [5, 11, 14, 26, 6, 8, 9, 22, 10, 7, 50].map((wch) => ({ wch }));
+    XLSX.utils.book_append_sheet(wb, reg, "Incident Register");
+    const table = (title: string, items: Counted[], h: string) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([...head, [h, "Incidents"], ...items.map((x) => [x.label, x.count])]), title);
+    table("Repeat Offenders", snap.offenders, "Learner");
+    table("By Class", snap.classes, "Class");
+    table("By Offence", snap.categories, "Offence");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([...head, ["Date", "Learner", "Offence", "Severity", "Description"], ...snap.serious.map((x) => [x.date, x.student, x.category, x.severity, x.note])]), "Serious - SGB Hearing");
+    XLSX.writeFile(wb, `${name.replace(/[^\w-]+/g, "_")}.xlsx`);
   };
 
   const grades = [...new Set((classes.data ?? []).map((c) => c.grade))].sort();
@@ -234,8 +241,8 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
             <Button size="sm" variant="outline" onClick={() => void save(true)}>
               <Gavel className="mr-2 h-4 w-4" />Prepare for hearing
             </Button>
-            <Button size="sm" variant="outline" onClick={() => csv(snapshot, `disciplinary-${filters.from}-${filters.to}`)}>
-              <Download className="mr-2 h-4 w-4" />CSV
+            <Button size="sm" variant="outline" onClick={() => void csv(snapshot, `disciplinary-${filters.from}-${filters.to}`)}>
+              <Download className="mr-2 h-4 w-4" />Excel register
             </Button>
             <Button size="sm" variant="outline" onClick={() => window.print()}>
               <Printer className="mr-2 h-4 w-4" />Print / PDF
@@ -282,6 +289,18 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
               )}
             </div>
           </div>
+          {(snapshot.register ?? []).length > 0 && (
+            <div className="mt-4">
+              <h3 className="mb-2 text-sm font-semibold">Learner discipline register</h3>
+              <div className="max-h-96 overflow-auto rounded-md border print:max-h-none"><table className="w-full min-w-[760px] text-left text-xs">
+                <thead className="sticky top-0 bg-muted text-muted-foreground"><tr>{["Date", "Adm No", "Learner", "Gr/Class", "Type", "Offence / Merit", "Level", "Pts", "Description"].map((h) => <th key={h} className="p-2">{h}</th>)}</tr></thead>
+                <tbody>{snapshot.register!.slice(0, 300).map((r, i) => <tr key={i} className="border-t align-top">
+                  <td className="p-2 whitespace-nowrap">{r.date}</td><td className="p-2">{r.admission || "—"}</td><td className="p-2">{r.learner}</td><td className="p-2">{r.cls || r.grade}</td>
+                  <td className={`p-2 ${r.type === "Merit" ? "text-success" : "text-destructive"}`}>{r.type}</td><td className="p-2">{r.category}</td><td className="p-2">{r.level}</td><td className="p-2">{r.points}</td><td className="p-2">{r.note}</td>
+                </tr>)}</tbody>
+              </table></div>
+            </div>
+          )}
         </Card>
       )}
 
@@ -305,8 +324,8 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
                   <Button size="sm" variant="ghost" onClick={() => setSnapshot(r.snapshot as unknown as Snapshot)}>
                     View
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => csv(r.snapshot as unknown as Snapshot, r.title)}>
-                    CSV
+                  <Button size="sm" variant="ghost" onClick={() => void csv(r.snapshot as unknown as Snapshot, r.title)}>
+                    Excel
                   </Button>
                 </div>
               </li>
