@@ -93,7 +93,7 @@ function Master() {
     return data;
   } });
 
-  const refresh = () => { void qc.invalidateQueries({ queryKey: ["master-"] }); };
+  const refresh = () => { void qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith("master-") }); };
   const done = (message: string) => { toast.success(message); refresh(); };
   const fail = (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not save changes");
 
