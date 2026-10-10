@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
+import { useServerFn } from "@tanstack/react-start";
+import { manageSchoolRemotely } from "@/lib/master.functions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ParentDashboard } from "@/components/dash/ParentDashboard";
@@ -14,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/app")({
 function AppHome() {
   const { loading, primaryRole, isPlatformAdmin, user, signOut } = useAuth();
   if (loading) return <div className="p-8"><Skeleton className="h-48 w-full" /></div>;
-  if (primaryRole === "school_admin") return <PrincipalDashboard />;
+  if (primaryRole === "school_admin") return isPlatformAdmin ? <><RemoteBanner /><PrincipalDashboard /></> : <PrincipalDashboard />;
   if (primaryRole === "teacher") return <TeacherDashboard />;
   if (primaryRole === "parent") return <ParentDashboard />;
   return (
@@ -24,6 +26,20 @@ function AppHome() {
       <div className="mt-6 flex gap-2">
         {isPlatformAdmin && <Button asChild><Link to="/master">Master Control Centre</Link></Button>}
         <Button variant="outline" onClick={() => void signOut()}>Sign out</Button>
+      </div>
+    </div>
+  );
+}
+
+function RemoteBanner() {
+  const { refresh } = useAuth();
+  const stop = useServerFn(manageSchoolRemotely);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-accent px-4 py-2 text-sm text-accent-foreground">
+      <span>You are managing this school remotely as the platform administrator.</span>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" asChild><Link to="/master">Control Centre</Link></Button>
+        <Button size="sm" onClick={async () => { await stop({ data: { schoolId: null } }); await refresh(); }}>Exit school</Button>
       </div>
     </div>
   );

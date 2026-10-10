@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { clearDemoData, platformStats, seedDemoSchool, type Credential } from "@/lib/master.functions";
+import { clearDemoData, deleteSchool, manageSchoolRemotely, platformStats, seedDemoSchool, type Credential } from "@/lib/master.functions";
 import { LearnerImport } from "@/components/LearnerImport";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -40,7 +40,13 @@ function downloadCredentials(credentials: Credential[]) {
 }
 
 function Master() {
-  const { isPlatformAdmin, loading, signOut } = useAuth();
+  const { isPlatformAdmin, loading, signOut, refresh: refreshRoles } = useAuth();
+  const navigate = useNavigate();
+  const manageRemote = useServerFn(manageSchoolRemotely);
+  const removeSchool = useServerFn(deleteSchool);
+  const [toDelete, setToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const qc = useQueryClient();
   const seed = useServerFn(seedDemoSchool);
   const clear = useServerFn(clearDemoData);
@@ -162,13 +168,14 @@ function Master() {
           </TabsContent>
           <TabsContent value="schools" className="space-y-6"><div><h2 className="font-display text-xl font-semibold">Schools</h2><p className="text-sm text-muted-foreground">Activate, suspend, and assign plans to schools.</p></div>
             <form className="flex flex-wrap items-end gap-2" onSubmit={async e => { e.preventDefault(); const name = schoolName.trim(); if (!name) return; const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${crypto.randomUUID().slice(0, 6)}`; const { error } = await supabase.from("schools").insert({ name, slug, status: "trial", plan_id: plans.data?.[0]?.id ?? null, trial_ends_at: new Date(Date.now() + 30 * 86400000).toISOString() }); if (error) fail(error); else { setSchoolName(""); done("School created"); } }}><div className="min-w-56 flex-1"><Label htmlFor="school-name">School name</Label><Input id="school-name" className="mt-2" value={schoolName} onChange={e => setSchoolName(e.target.value)} required /></div><Button><Plus className="mr-2 h-4 w-4" /> Create school</Button></form>
-            <div className="overflow-x-auto rounded-md border"><table className="w-full min-w-[650px] text-left text-sm"><thead className="bg-muted text-muted-foreground"><tr><th className="p-3">School</th><th className="p-3">Status</th><th className="p-3">Plan</th><th className="p-3">Action</th></tr></thead><tbody>{schools.data?.map(s => <tr key={s.id} className="border-t"><td className="p-3 font-medium">{s.name}{s.is_demo && <span className="ml-2 text-xs text-muted-foreground">Demo</span>}</td><td className="p-3 capitalize">{s.status}</td><td className="p-3"><select aria-label={`Plan for ${s.name}`} className="h-9 rounded-md border bg-background px-2" value={s.plan_id ?? ""} onChange={async e => { const { error } = await supabase.from("schools").update({ plan_id: e.target.value || null }).eq("id", s.id); if (error) fail(error); else done("School plan updated"); }}><option value="">No plan</option>{plans.data?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td><td className="p-3"><Button variant={s.status === "suspended" ? "outline" : "destructive"} size="sm" onClick={async () => { const status = s.status === "suspended" ? "active" : "suspended"; if (status === "suspended" && !window.confirm(`Suspend ${s.name}?`)) return; const { error } = await supabase.from("schools").update({ status }).eq("id", s.id); if (error) fail(error); else done(`School ${status}`); }}>{s.status === "suspended" ? "Activate" : "Suspend"}</Button></td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto rounded-md border"><table className="w-full min-w-[650px] text-left text-sm"><thead className="bg-muted text-muted-foreground"><tr><th className="p-3">School</th><th className="p-3">Status</th><th className="p-3">Plan</th><th className="p-3">Action</th></tr></thead><tbody>{schools.data?.map(s => <tr key={s.id} className="border-t"><td className="p-3 font-medium">{s.name}{s.is_demo && <span className="ml-2 text-xs text-muted-foreground">Demo</span>}</td><td className="p-3 capitalize">{s.status}</td><td className="p-3"><select aria-label={`Plan for ${s.name}`} className="h-9 rounded-md border bg-background px-2" value={s.plan_id ?? ""} onChange={async e => { const { error } = await supabase.from("schools").update({ plan_id: e.target.value || null }).eq("id", s.id); if (error) fail(error); else done("School plan updated"); }}><option value="">No plan</option>{plans.data?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></td><td className="p-3"><Button variant={s.status === "suspended" ? "outline" : "destructive"} size="sm" onClick={async () => { const status = s.status === "suspended" ? "active" : "suspended"; if (status === "suspended" && !window.confirm(`Suspend ${s.name}?`)) return; const { error } = await supabase.from("schools").update({ status }).eq("id", s.id); if (error) fail(error); else done(`School ${status}`); }}>{s.status === "suspended" ? "Activate" : "Suspend"}</Button><div className="mt-2 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={async () => { try { await manageRemote({ data: { schoolId: s.id } }); await refreshRoles(); toast.success(`Managing ${s.name} as principal`); void navigate({ to: "/app" }); } catch (error) { fail(error); } }}>Manage school</Button><Button size="sm" variant="ghost" className="text-destructive" onClick={() => { setConfirmEmail(""); setToDelete({ id: s.id, name: s.name }); }}>Delete school</Button></div></td></tr>)}</tbody></table></div>
           </TabsContent>
           <TabsContent value="plans" className="space-y-5"><div><h2 className="font-display text-xl font-semibold">Plans & pricing</h2><p className="text-sm text-muted-foreground">Prices are stored in cents. Changes apply to schools on each plan.</p></div><div className="grid gap-4 lg:grid-cols-3">{plans.data?.map(p => <PlanEditor key={p.id} plan={p} flagKeys={flags.data?.map(f => f.key) ?? []} onSaved={refresh} />)}</div></TabsContent>
           <TabsContent value="branding" className="space-y-6"><div><h2 className="font-display text-xl font-semibold">Platform branding</h2><p className="text-sm text-muted-foreground">Set your public identity and announcement.</p></div>{branding.data && <BrandEditor key={String(branding.data.id)} settings={branding.data} onSaved={refresh} />}
             <div className="border-t pt-5"><h3 className="mb-3 font-semibold">School branding</h3><select className="mb-3 h-9 min-w-56 rounded-md border bg-background px-2" aria-label="School to brand" value={newFlagSchool} onChange={e => setNewFlagSchool(e.target.value)}><option value="">Choose a school</option>{schools.data?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>{schools.data?.find(s => s.id === newFlagSchool) && <SchoolBrandEditor key={newFlagSchool} school={schools.data.find(s => s.id === newFlagSchool) as NonNullable<typeof schools.data>[number]} onSaved={refresh} />}</div>
           </TabsContent>
         </Tabs>
+        {toDelete && <div role="dialog" aria-modal="true" aria-labelledby="del-title" className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4"><div className="w-full max-w-md rounded-xl border border-destructive/50 bg-card p-6 shadow-lg"><h2 id="del-title" className="font-display text-lg font-semibold text-destructive">Delete {toDelete.name}?</h2><p className="mt-2 text-sm text-muted-foreground">This permanently removes the school and all its learners, parents, staff links, attendance, marks, behaviour notes and notices. It cannot be undone.</p><Label htmlFor="del-confirm" className="mt-4 block">Type your administrator email to confirm</Label><Input id="del-confirm" className="mt-2" autoComplete="off" value={confirmEmail} onChange={e => setConfirmEmail(e.target.value)} placeholder="timmytim691@gmail.com" /><div className="mt-5 flex justify-end gap-2"><Button variant="outline" disabled={deleting} onClick={() => setToDelete(null)}>Cancel</Button><Button variant="destructive" disabled={deleting || confirmEmail.trim().toLowerCase() !== "timmytim691@gmail.com"} onClick={async () => { setDeleting(true); try { await removeSchool({ data: { schoolId: toDelete.id, confirmEmail } }); setToDelete(null); done(`${toDelete.name} deleted`); } catch (error) { fail(error); } finally { setDeleting(false); } }}>{deleting ? "Deleting…" : "Delete permanently"}</Button></div></div></div>}
       </main>
     </div>
   );
