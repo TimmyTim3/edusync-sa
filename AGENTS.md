@@ -12,3 +12,4 @@
 - Keep large demo generation in bounded database batches rather than one long RPC, because large attendance and marks inserts exceed statement time limits.
 - Enforce register ownership in database policies and audit principal overrides server-side, because hiding edit buttons cannot secure attendance records.
 - Store disciplinary report snapshots in a school-scoped archive, because saved hearing reports must remain reproducible.
+- Remote school management grants the platform admin a single school_admin role row via a server function (audited) and removes it on exit, because RLS already scopes principals by user_roles.
