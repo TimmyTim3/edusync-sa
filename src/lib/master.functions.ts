@@ -77,3 +77,33 @@ export const platformStats = createServerFn({ method: "POST" })
     ]);
     return { schools, students, parents, attendance, marks, notices, staff };
   });
+
+/** Gives the platform admin principal access to one school (replacing any previous remote session). */
+export const manageSchoolRemotely = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { schoolId: string | null }) => ({ schoolId: input.schoolId }))
+  .handler(async ({ data, context }) => {
+    const email = assertPlatformAdmin(context.claims as Record<string, unknown>);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", context.userId).eq("role", "school_admin");
+    if (data.schoolId) {
+      const { error } = await supabaseAdmin.from("user_roles").insert({ user_id: context.userId, school_id: data.schoolId, role: "school_admin" });
+      if (error) throw new Error(error.message);
+    }
+    await supabaseAdmin.from("audit_logs").insert({ actor_email: email, actor_id: context.userId, school_id: data.schoolId, action: data.schoolId ? "remote_manage_start" : "remote_manage_end", details: {} });
+    return { ok: true };
+  });
+
+/** Permanently deletes a school and all its data. Caller must retype the admin email. */
+export const deleteSchool = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { schoolId: string; confirmEmail: string }) => input)
+  .handler(async ({ data, context }) => {
+    const email = assertPlatformAdmin(context.claims as Record<string, unknown>);
+    if (data.confirmEmail.trim().toLowerCase() !== email) throw new Error("Confirmation email does not match");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: res, error } = await supabaseAdmin.rpc("delete_school" as never, { _school: data.schoolId } as never);
+    if (error) throw new Error((error as { message: string }).message);
+    await supabaseAdmin.from("audit_logs").insert({ actor_email: email, actor_id: context.userId, action: "delete_school", details: (res ?? {}) as Json });
+    return res as unknown as { deleted: string };
+  });
