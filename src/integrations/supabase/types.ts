@@ -1340,6 +1340,7 @@ export type Database = {
         Returns: boolean
       }
       clear_demo_data: { Args: never; Returns: Json }
+      delete_school: { Args: { _school: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
