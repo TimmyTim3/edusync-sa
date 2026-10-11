@@ -71,6 +71,13 @@
       "when": 1791179161053,
       "tag": "0009_clear_demo_full_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791681799231,
+      "tag": "0010_fix_behaviour_points_and_seed_mix",
+      "breakpoints": true
     }
   ]
 }
