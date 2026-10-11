@@ -11,7 +11,7 @@ import { Shell, Card, Stat, Empty, today } from "./Shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ClassGlance } from "./ClassGlance";
+import { ClassGlance, StudentRecord } from "./ClassGlance";
 
 type Status = Database["public"]["Enums"]["attendance_status"];
 type Assign = { class_id: string; subject_id: string; classes: { name: string; grade: string } | null; subjects: { name: string } | null };
@@ -123,6 +123,7 @@ export function TeacherDashboard() {
   };
 
   const st = students.data?.students ?? [];
+  const [profile, setProfile] = useState<{ id: string; first_name: string; last_name: string; admission_no: string } | null>(null);
   const present = st.filter((s) => (marks[s.id] ?? "present") === "present").length;
 
   const schoolPicker = (
@@ -190,7 +191,7 @@ export function TeacherDashboard() {
               <tbody>
                 {st.map((s) => (
                   <tr key={s.id} className="border-b">
-                    <td className="py-1.5">{s.last_name}, {s.first_name} <span className="text-xs text-muted-foreground">{s.admission_no}</span></td>
+                    <td className="py-1.5"><button type="button" className="text-left hover:text-primary hover:underline" onClick={() => setProfile(s)}>{s.last_name}, {s.first_name}</button> <span className="text-xs text-muted-foreground">{s.admission_no}</span></td>
                      {on("attendance") && <td className="whitespace-nowrap">
                       {STATUSES.map((x) => (
                          <Button key={x} size="sm" variant={(marks[s.id] ?? "present") === x ? "default" : "ghost"} title={x} aria-label={`${s.first_name} ${s.last_name}: ${x}`} onClick={() => setMarks({ ...marks, [s.id]: x })}
@@ -240,6 +241,7 @@ export function TeacherDashboard() {
         </div>
       </div>
       </>}
+      {profile && <StudentRecord student={profile} onClose={() => setProfile(null)} />}
     </Shell>
   );
 }
