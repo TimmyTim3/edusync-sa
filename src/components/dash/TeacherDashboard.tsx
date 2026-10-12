@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ClassGlance, StudentRecord } from "./ClassGlance";
+import { LearnerSearch } from "./SchoolTools";
 
 type Status = Database["public"]["Enums"]["attendance_status"];
 type Assign = { class_id: string; subject_id: string; classes: { name: string; grade: string } | null; subjects: { name: string } | null };
@@ -124,12 +125,17 @@ export function TeacherDashboard() {
 
   const st = students.data?.students ?? [];
   const [profile, setProfile] = useState<{ id: string; first_name: string; last_name: string; admission_no: string } | null>(null);
+  const [stFilter, setStFilter] = useState<"all" | "absent" | "late" | "excused">("all");
+  const [stTerm, setStTerm] = useState("");
   const present = st.filter((s) => (marks[s.id] ?? "present") === "present").length;
 
   const schoolPicker = (
-    <div className="mb-4 flex flex-wrap gap-2">
-      <Button size="sm" variant={!browse ? "default" : "outline"} onClick={() => setBrowse(false)} disabled={!list.length}>My classes</Button>
-      <Button size="sm" variant={browse ? "default" : "outline"} onClick={() => setBrowse(true)}>Whole school · all grades</Button>
+    <div className="mb-4 space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant={!browse ? "default" : "outline"} onClick={() => setBrowse(false)} disabled={!list.length}>My classes</Button>
+        <Button size="sm" variant={browse ? "default" : "outline"} onClick={() => setBrowse(true)}>Whole school · all grades</Button>
+      </div>
+      <LearnerSearch schoolId={schoolId} />
     </div>
   );
 
@@ -186,10 +192,17 @@ export function TeacherDashboard() {
             {on("marks") && <Input className="h-9 w-48" placeholder="New assessment title" value={assess} onChange={(e) => setAssess(e.target.value)} />}
             {on("marks") && <Button size="sm" variant="secondary" onClick={publishMarks}>Publish marks</Button>}
           </div>
+          {on("attendance") && <div className="mb-3 flex flex-wrap items-center gap-2">
+            {(["all", "absent", "late", "excused"] as const).map((f) => {
+              const n = f === "all" ? st.length : st.filter((s) => (marks[s.id] ?? "present") === f).length;
+              return <Button key={f} size="sm" variant={stFilter === f ? "default" : "outline"} onClick={() => setStFilter(f)} className="capitalize">{f} ({n})</Button>;
+            })}
+            <Input className="h-9 min-w-40 flex-1" placeholder="Find learner in this class…" value={stTerm} onChange={(e) => setStTerm(e.target.value)} />
+          </div>}
           <div className="max-h-[520px] overflow-auto">
             <table className="w-full text-sm">
               <tbody>
-                {st.map((s) => (
+                {st.filter((s) => (stFilter === "all" || (marks[s.id] ?? "present") === stFilter) && (!stTerm.trim() || `${s.first_name} ${s.last_name} ${s.admission_no}`.toLowerCase().includes(stTerm.trim().toLowerCase()))).map((s) => (
                   <tr key={s.id} className="border-b">
                     <td className="py-1.5"><button type="button" className="text-left hover:text-primary hover:underline" onClick={() => setProfile(s)}>{s.last_name}, {s.first_name}</button> <span className="text-xs text-muted-foreground">{s.admission_no}</span></td>
                      {on("attendance") && <td className="whitespace-nowrap">
