@@ -68,6 +68,7 @@ export function PrincipalDashboard() {
   });
 
   const [tab, setTab] = useState<"overview" | "discipline">("overview");
+  const [drawer, setDrawer] = useState(false);
   const [glance, setGlance] = useState<{ id: string; name: string } | null>(null);
   const [n, setN] = useState({ title: "", body: "", urgent: false });
   const post = async () => {
@@ -143,6 +144,7 @@ export function PrincipalDashboard() {
       </div>
       </>
       )}
+      {drawer && schoolId && <BehaviourDrawer schoolId={schoolId} onClose={() => setDrawer(false)} />}
     </Shell>
   );
 }
