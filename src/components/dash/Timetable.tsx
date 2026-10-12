@@ -41,7 +41,7 @@ export function TimetablePanel({ schoolId }: { schoolId: string }) {
     if (!f.title || (!f.grade && !f.class_id)) { toast.error("Add a subject/paper and choose a grade or class"); return; }
     const { error } = await supabase.from("timetable_sessions").insert({
       school_id: schoolId, kind: f.kind, title: f.title, grade: f.class_id ? null : f.grade, class_id: f.class_id || null,
-      date: f.date, start_time: f.start, end_time: f.end, venue: f.venue || null, created_by: user?.id,
+      date: f.date, start_time: f.start, end_time: f.end, venue: f.venue || null, created_by: user?.id ?? null,
     });
     if (error) { toast.error(error.message); return; }
     toast.success("Session added to the timetable");
@@ -138,7 +138,7 @@ function SessionRegister({ schoolId, session }: { schoolId: string; session: Ses
   const list = q.data?.students ?? [];
   const count = (s: Status) => list.filter((l) => st(l.id) === s).length;
   const save = async () => {
-    const rows = list.map((l) => ({ school_id: schoolId, session_id: session.id, student_id: l.id, status: st(l.id), marked_by: user?.id }));
+    const rows = list.map((l) => ({ school_id: schoolId, session_id: session.id, student_id: l.id, status: st(l.id), marked_by: user?.id ?? null }));
     for (let i = 0; i < rows.length; i += 500) {
       const { error } = await supabase.from("session_attendance").upsert(rows.slice(i, i + 500), { onConflict: "session_id,student_id" });
       if (error) { toast.error(error.message); return; }
