@@ -8,6 +8,7 @@ import { useFeatureFlags } from "@/lib/features";
 import { Shell, Card, Stat, today } from "./Shell";
 import { DisciplinaryReports } from "./DisciplinaryReports";
 import { ClassGlance } from "./ClassGlance";
+import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NoticesManager, ParentLinker } from "./SchoolTools";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,9 +26,21 @@ export function PrincipalDashboard() {
       const c = (q: PromiseLike<{ count: number | null }>) => Promise.resolve(q).then((r) => r.count ?? 0);
       const sid = schoolId;
       if (!sid) throw new Error("No school selected");
-      // most recent date with attendance
-      const { data: last } = await supabase.from("attendance_records").select("date").eq("school_id", sid).order("date", { ascending: false }).limit(1);
-      const day = last?.[0]?.date ?? today();
+      // most recent full school day: skip days where only a few classes were marked
+      const roll = await c(supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", sid).is("deleted_at", null));
+      let day = today();
+      let before: string | null = null;
+      for (let i = 0; i < 10; i++) {
+        let lq = supabase.from("attendance_records").select("date").eq("school_id", sid).order("date", { ascending: false }).limit(1);
+        if (before) lq = lq.lt("date", before);
+        const { data: last } = await lq;
+        const d0 = last?.[0]?.date;
+        if (!d0) break;
+        if (i === 0) day = d0;
+        const n0 = await c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", d0));
+        if (n0 >= roll * 0.5) { day = d0; break; }
+        before = d0;
+      }
       const [school, students, parents, teachers, marked, present, positive, negative] = await Promise.all([
         supabase.from("schools").select("name").eq("id", sid).single(),
         c(supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", sid)),
@@ -55,6 +68,7 @@ export function PrincipalDashboard() {
   });
 
   const [tab, setTab] = useState<"overview" | "discipline">("overview");
+  const [drawer, setDrawer] = useState(false);
   const [glance, setGlance] = useState<{ id: string; name: string } | null>(null);
   const [n, setN] = useState({ title: "", body: "", urgent: false });
   const post = async () => {
@@ -85,13 +99,14 @@ export function PrincipalDashboard() {
         <ClassGlance classId={glance.id} className={glance.name} onClose={() => setGlance(null)} />
       ) : (
       <>
-      <p className="mb-3 text-xs text-muted-foreground">Tip: tap any class below to open its Class at a Glance.</p>
+      <div className="mb-4"><LearnerSearch schoolId={schoolId} /></div>
+      <p className="mb-3 text-xs text-muted-foreground">Tip: tap any class below to open its Class at a Glance, or tap Behaviour to see every merit and concern.</p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="Learners" value={s?.students.toLocaleString() ?? "…"} />
         <Stat label="Parents" value={s?.parents.toLocaleString() ?? "…"} />
         <Stat label="Teachers" value={s?.teachers ?? "…"} />
-        {on("attendance") && <Stat label="Attendance" value={`${rate}%`} hint={s ? `${s.present} of ${s.marked} at school (${s.late} late) · ${s.marked - s.present} not at school · ${s.day}` : ""} />}
-        {on("behaviour") && <div className="rounded-md border bg-card p-4"><p className="text-xs uppercase text-muted-foreground">Behaviour</p><p className="mt-1 font-display text-2xl font-semibold"><span className="text-success">+{s?.positive ?? "…"}</span><span className="text-muted-foreground"> / </span><span className="text-destructive">−{s?.negative ?? "…"}</span></p><p className="text-xs text-muted-foreground">merits / concerns</p></div>}
+        {on("attendance") && <Stat label="Attendance" value={`${rate}%`} hint={s ? `${s.present.toLocaleString()} of ${s.marked.toLocaleString()} at school (${s.late} late) · ${s.marked - s.present} not at school · ${s.day}` : ""} />}
+        {on("behaviour") && <button type="button" onClick={() => setDrawer(true)} className="rounded-md border bg-card p-4 text-left transition hover:border-primary"><p className="text-xs uppercase text-muted-foreground">Behaviour</p><p className="mt-1 font-display text-2xl font-semibold"><span className="text-success">+{s?.positive ?? "…"}</span><span className="text-muted-foreground"> / </span><span className="text-destructive">−{s?.negative ?? "…"}</span></p><p className="text-xs text-muted-foreground">merits / concerns · tap for details</p></button>}
       </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card title="Classes by grade" className="lg:col-span-2">
@@ -123,16 +138,13 @@ export function PrincipalDashboard() {
             ))}
           </ul>
         </Card>}
-        {on("notices") && <Card title="Recent notices" className="lg:col-span-2">
-          <ul className="divide-y text-sm">
-            {(s?.notices ?? []).map((x) => (
-              <li key={x.id} className="flex justify-between py-2"><span>{x.title}</span><span className="text-muted-foreground">{x.scope} · {new Date(x.published_at).toLocaleDateString()}</span></li>
-            ))}
-          </ul>
-        </Card>}
+        {on("notices") && schoolId && <NoticesManager schoolId={schoolId} />}
+        {schoolId && <ParentLinker schoolId={schoolId} />}
+        {schoolId && <ClassTeacherAssign schoolId={schoolId} />}
       </div>
       </>
       )}
+      {drawer && schoolId && <BehaviourDrawer schoolId={schoolId} onClose={() => setDrawer(false)} />}
     </Shell>
   );
 }

@@ -81,18 +81,23 @@ export function ParentDashboard() {
   return (
     <Shell title="Family dashboard" subtitle={`${kids.length} ${kids.length === 1 ? "child" : "children"} linked`} lastUpdate={lastUpdate}>
       <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-        {kids.map((k) => (
-          <Button
-            key={k.id}
-            variant={k.id === child?.id ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSel(k.id)}
-            className="shrink-0 gap-2"
-          >
-            {k.photo_url && <img src={k.photo_url} alt="" className="h-6 w-6 rounded-full" />}
-            {k.first_name} · {k.classes?.name}
-          </Button>
-        ))}
+        {kids.map((k, i) => {
+          const color = `var(--chart-${(i % 5) + 1})`;
+          const active = k.id === child?.id;
+          return (
+            <Button
+              key={k.id}
+              variant="outline"
+              size="sm"
+              onClick={() => setSel(k.id)}
+              className="shrink-0 gap-2 border-2"
+              style={{ borderColor: color, ...(active ? { backgroundColor: color, color: "var(--background)" } : {}) }}
+            >
+              {k.photo_url ? <img src={k.photo_url} alt="" className="h-6 w-6 rounded-full" /> : <span className="h-3 w-3 rounded-full" style={{ backgroundColor: active ? "var(--background)" : color }} />}
+              {k.first_name} · {k.classes?.name}
+            </Button>
+          );
+        })}
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {on("attendance") && <Stat label="Today" value={todayRec ? todayRec.status.replace("_", " ") : "Not marked"} />}
