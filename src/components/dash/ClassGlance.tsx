@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -90,6 +91,10 @@ export function ClassGlance({ classId, className, onClose }: { classId: string; 
   const TONE: Record<Tone, string> = { good: "bg-success", warn: "bg-warning", bad: "bg-destructive" };
   const TEXT: Record<Tone, string> = { good: "text-success", warn: "text-warning", bad: "text-destructive" };
   const selected = rows.find((r) => r.id === studentId);
+  const [hwOpen, setHwOpen] = useState<string | null>(null);
+  const nameCount = new Map<string, number>();
+  for (const r of rows) { const k = `${r.first_name} ${r.last_name}`; nameCount.set(k, (nameCount.get(k) ?? 0) + 1); }
+  const label = (r: { first_name: string; last_name: string; admission_no: string }) => { const k = `${r.first_name} ${r.last_name}`; return (nameCount.get(k) ?? 0) > 1 ? `${k} · #${r.admission_no.slice(-4)}` : k; };
 
   // Each list sets its own tone so the dot always matches what the list is about:
   // top performers = green, late arrivals = amber/red, concerns = red.
@@ -97,7 +102,7 @@ export function ClassGlance({ classId, className, onClose }: { classId: string; 
     const t = tone ?? health(r);
     return (
       <li><button className="flex w-full items-center gap-2 rounded px-1 py-1 text-left hover:bg-muted" onClick={() => setStudentId(r.id)}>
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${TONE[t]}`} /><span className="flex-1 truncate">{r.first_name} {r.last_name}</span><span className={`shrink-0 text-xs ${tone ? TEXT[t] : "text-muted-foreground"}`}>{right}</span>
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${TONE[t]}`} /><span className="flex-1 truncate">{label(r)}</span><span className={`shrink-0 text-xs ${tone ? TEXT[t] : "text-muted-foreground"}`}>{right}</span>
       </button></li>
     );
   };
@@ -127,14 +132,14 @@ export function ClassGlance({ classId, className, onClose }: { classId: string; 
             <Card title={`Overdue homework (${overdue.length})`}><ul className="space-y-3 text-sm">{overdue.length ? overdue.slice(0, 6).map((h) => { const m = missing(h.id); return (
               <li key={h.id}><div className="flex justify-between gap-2"><span className="truncate font-medium">{h.title}</span><span className="shrink-0 text-xs text-destructive">due {h.due_date}</span></div>
                 <p className="text-xs text-muted-foreground">{doneQ.isLoading ? "Checking…" : m.length ? `Not handed in (${m.length}):` : "Everyone handed in."}</p>
-                {m.length > 0 && <div className="mt-1 flex max-h-28 flex-wrap gap-1 overflow-y-auto">{m.map((r) => <button key={r.id} onClick={() => setStudentId(r.id)} className="rounded border border-destructive/40 px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10">{r.first_name} {r.last_name}</button>)}</div>}
+                {m.length > 0 && <div className="mt-1 flex max-h-28 flex-wrap gap-1 overflow-y-auto">{(hwOpen === h.id ? m : m.slice(0, 8)).map((r) => <button key={r.id} onClick={() => setStudentId(r.id)} className="rounded border border-destructive/40 px-1.5 py-0.5 text-xs text-destructive hover:bg-destructive/10">{label(r)}</button>)}{m.length > 8 && <button className="px-1.5 text-xs text-primary underline" onClick={() => setHwOpen(hwOpen === h.id ? null : h.id)}>{hwOpen === h.id ? "show less" : `+${m.length - 8} more`}</button>}</div>}
               </li>); }) : <Empty text="No overdue homework." />}</ul></Card>
             <Card title="Register for a date">
               <Input type="date" value={day} max={today()} onChange={(e) => setDay(e.target.value)} />
               {dayQ.data && !dayQ.data.length ? <Empty text="No register for this date (weekend, holiday or not yet marked)." /> : (
                 <>
                   <div className="mt-2 flex flex-wrap gap-1 text-xs">{Object.entries(ATT_STYLES).map(([k, s]) => <span key={k} className={`rounded border px-2 py-0.5 ${s.cls}`}>{s.symbol} {s.label}: {(dayQ.data ?? []).filter((r) => r.status === k).length}</span>)}</div>
-                  <ul className="mt-2 max-h-56 overflow-y-auto text-sm">{rows.map((r) => { const st = dayMap.get(r.id); const s = st ? ATT_STYLES[st] : undefined; return <li key={r.id} className="flex justify-between py-0.5"><span className="truncate">{r.first_name} {r.last_name}</span><span className={`rounded border px-1.5 text-xs ${s?.cls ?? ""}`}>{s ? `${s.symbol} ${s.label}` : "—"}</span></li>; })}</ul>
+                  <ul className="mt-2 max-h-56 overflow-y-auto text-sm">{rows.map((r) => { const st = dayMap.get(r.id); const s = st ? ATT_STYLES[st] : undefined; return <li key={r.id} className="flex justify-between py-0.5"><button className="truncate text-left hover:text-primary" onClick={() => setStudentId(r.id)}>{label(r)}</button><span className={`rounded border px-1.5 text-xs ${s?.cls ?? ""}`}>{s ? `${s.symbol} ${s.label}` : "—"}</span></li>; })}</ul>
                 </>
               )}
               <AttendanceLegend />
@@ -163,10 +168,56 @@ export function StudentRecord({ student, onClose }: { student: { id: string; fir
       <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border bg-card p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between"><div><h3 className="font-display text-lg font-semibold">{student.first_name} {student.last_name}</h3><p className="text-xs text-muted-foreground">{student.admission_no} · full record</p></div>
           <Button size="icon" variant="ghost" aria-label="Close" onClick={onClose}><X className="h-4 w-4" /></Button></div>
+        <ChangeClass studentId={student.id} />
         <AttendanceCalendar records={q.data?.att ?? []} />
         <h4 className="mt-5 mb-2 font-semibold">Behaviour notes ({q.data?.beh.length ?? 0})</h4>
         <ul className="divide-y text-sm">{(q.data?.beh ?? []).map((b) => <li key={b.id} className="py-2"><div className="flex justify-between"><span className="font-medium">{b.category}</span><span className={b.is_positive ? "text-success" : "text-destructive"}>{b.is_positive ? "+" : "−"}{Math.abs(b.points)}</span></div><p className="text-muted-foreground">{b.note}</p><p className="text-xs text-muted-foreground">{new Date(b.created_at).toLocaleDateString()}</p></li>)}</ul>
       </div>
+    </div>
+  );
+}
+
+const MOVE_REASONS = ["Subject stream change", "Remedial / learning support", "Class rebalance", "Behaviour separation", "Parent request", "Admin correction"];
+
+/** Move a learner to another class. Past registers, marks and behaviour stay exactly where they were. */
+function ChangeClass({ studentId }: { studentId: string }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState("");
+  const [reason, setReason] = useState(MOVE_REASONS[0]!);
+  const [busy, setBusy] = useState(false);
+  const q = useQuery({
+    queryKey: ["change-class", studentId],
+    queryFn: async () => {
+      const { data: s } = await supabase.from("students").select("school_id, class_id, classes(name, grade)").eq("id", studentId).single();
+      const { data: cls } = s ? await supabase.from("classes").select("id, name, grade").eq("school_id", s.school_id).order("grade").order("name") : { data: [] };
+      return { s: s as unknown as { school_id: string; class_id: string | null; classes: { name: string; grade: string } | null } | null, cls: cls ?? [] };
+    },
+  });
+  const cur = q.data?.s;
+  const save = async () => {
+    if (!to || busy || !cur) return;
+    setBusy(true);
+    const { error } = await supabase.from("students").update({ class_id: to }).eq("id", studentId);
+    if (!error) {
+      const dest = q.data?.cls.find((c) => c.id === to)?.name ?? "new class";
+      await supabase.from("behaviour_notes").insert({ school_id: cur.school_id, student_id: studentId, category: "Class change", is_positive: true, severity: "low", points: 0, note: `Moved from ${cur.classes?.name ?? "no class"} to ${dest}: ${reason}`, parent_visible: false });
+      toast.success(`Moved to ${dest}. Earlier records stay unchanged.`);
+      setOpen(false); setTo(""); void qc.invalidateQueries();
+    } else toast.error(error.message);
+    setBusy(false);
+  };
+  return (
+    <div className="mb-4 rounded-lg border p-3 text-sm">
+      <div className="flex items-center justify-between gap-2"><span>Class: <b>{cur?.classes?.name ?? "—"}</b></span><Button size="sm" variant="outline" onClick={() => setOpen(!open)}>{open ? "Cancel" : "Change class"}</Button></div>
+      {open && <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        <select className="h-9 rounded-md border bg-background px-2" value={to} onChange={(e) => setTo(e.target.value)} aria-label="New class">
+          <option value="">Move to…</option>
+          {(q.data?.cls ?? []).filter((c) => c.id !== cur?.class_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select className="h-9 rounded-md border bg-background px-2" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Reason">{MOVE_REASONS.map((r) => <option key={r}>{r}</option>)}</select>
+        <Button size="sm" disabled={!to || busy} onClick={save}>{busy ? "Moving…" : "Confirm move"}</Button>
+      </div>}
     </div>
   );
 }
