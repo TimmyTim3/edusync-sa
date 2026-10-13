@@ -201,7 +201,7 @@ function ChangeClass({ studentId }: { studentId: string }) {
     const { error } = await supabase.from("students").update({ class_id: to }).eq("id", studentId);
     if (!error) {
       const dest = q.data?.cls.find((c) => c.id === to)?.name ?? "new class";
-      await supabase.from("behaviour_notes").insert({ school_id: cur.school_id, student_id: studentId, category: "Class change", is_positive: true, severity: "low", points: 0, note: `Moved from ${cur.classes?.name ?? "no class"} to ${dest}: ${reason}`, parent_visible: false });
+      await supabase.from("audit_logs").insert({ action: "change_class", details: { student_id: studentId, from: cur.classes?.name ?? null, to: dest, reason } });
       toast.success(`Moved to ${dest}. Earlier records stay unchanged.`);
       setOpen(false); setTo(""); void qc.invalidateQueries();
     } else toast.error(error.message);
