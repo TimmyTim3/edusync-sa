@@ -8,7 +8,8 @@ import { useFeatureFlags } from "@/lib/features";
 import { Shell, Card, Stat, today } from "./Shell";
 import { DisciplinaryReports } from "./DisciplinaryReports";
 import { ClassGlance } from "./ClassGlance";
-import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NoticesManager, ParentLinker } from "./SchoolTools";
+import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NoticesManager, ParentLinker, RolloverWizard, StaffIngest } from "./SchoolTools";
+import { TimetablePanel } from "./Timetable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,7 +68,7 @@ export function PrincipalDashboard() {
     },
   });
 
-  const [tab, setTab] = useState<"overview" | "discipline">("overview");
+  const [tab, setTab] = useState<"overview" | "discipline" | "timetable" | "staff">("overview");
   const [drawer, setDrawer] = useState(false);
   const [glance, setGlance] = useState<{ id: string; name: string } | null>(null);
   const [n, setN] = useState({ title: "", body: "", urgent: false });
@@ -85,15 +86,21 @@ export function PrincipalDashboard() {
 
   return (
     <Shell title={s?.name ?? "School overview"} subtitle="Principal dashboard" lastUpdate={lastUpdate}>
-      <div className="mb-5 flex gap-2 print:hidden">
+      <div className="mb-5 flex flex-wrap gap-2 print:hidden">
         <Button size="sm" variant={tab === "overview" ? "default" : "outline"} onClick={() => setTab("overview")}>Overview</Button>
+        <Button size="sm" variant={tab === "timetable" ? "default" : "outline"} onClick={() => setTab("timetable")}>Exams & extra classes</Button>
+        <Button size="sm" variant={tab === "staff" ? "default" : "outline"} onClick={() => setTab("staff")}>Staff & year-end</Button>
         {on("behaviour") && (
           <Button size="sm" variant={tab === "discipline" ? "default" : "outline"} onClick={() => setTab("discipline")}>
             Disciplinary reports
           </Button>
         )}
       </div>
-      {tab === "discipline" ? (
+      {tab === "timetable" && schoolId ? (
+        <TimetablePanel schoolId={schoolId} />
+      ) : tab === "staff" && schoolId ? (
+        <div className="grid gap-4 lg:grid-cols-2"><StaffIngest schoolId={schoolId} /><ClassTeacherAssign schoolId={schoolId} /><RolloverWizard schoolId={schoolId} /></div>
+      ) : tab === "discipline" ? (
         <DisciplinaryReports schoolId={schoolId} />
       ) : glance ? (
         <ClassGlance classId={glance.id} className={glance.name} onClose={() => setGlance(null)} />
