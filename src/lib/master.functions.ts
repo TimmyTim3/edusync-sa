@@ -107,3 +107,26 @@ export const deleteSchool = createServerFn({ method: "POST" })
     await supabaseAdmin.from("audit_logs").insert({ actor_email: email, actor_id: context.userId, action: "delete_school", details: (res ?? {}) as Json });
     return res as unknown as { deleted: string };
   });
+
+/** Demo only: mark ~85% of past-due homework as handed in so overdue lists look realistic. */
+export const seedHomeworkCompletions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    assertPlatformAdmin(context.claims as Record<string, unknown>);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: schools } = await supabaseAdmin.from("schools").select("id").eq("is_demo", true);
+    const today = new Date().toISOString().slice(0, 10);
+    let added = 0;
+    for (const sc of schools ?? []) {
+      const { data: hws } = await supabaseAdmin.from("homework").select("id, class_id").eq("school_id", sc.id).lt("due_date", today).limit(2000);
+      for (const h of hws ?? []) {
+        if (!h.class_id) continue;
+        const { count } = await supabaseAdmin.from("homework_completions").select("id", { count: "exact", head: true }).eq("homework_id", h.id);
+        if (count) continue;
+        const { data: st } = await supabaseAdmin.from("students").select("id").eq("class_id", h.class_id).is("deleted_at", null);
+        const rows = (st ?? []).filter(() => Math.random() < 0.85).map((s) => ({ homework_id: h.id, student_id: s.id, school_id: sc.id }));
+        if (rows.length) { await supabaseAdmin.from("homework_completions").insert(rows); added += rows.length; }
+      }
+    }
+    return { added };
+  });
