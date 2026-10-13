@@ -13,6 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ClassGlance, StudentRecord } from "./ClassGlance";
 import { LearnerSearch } from "./SchoolTools";
+import { TimetablePanel } from "./Timetable";
+
+const REASONS = ["Sick / medical", "Doctor or clinic", "Transport problem", "Family emergency", "Bereavement", "Weather", "Religious / cultural", "Unexplained"];
 
 type Status = Database["public"]["Enums"]["attendance_status"];
 type Assign = { class_id: string; subject_id: string; classes: { name: string; grade: string } | null; subjects: { name: string } | null };
@@ -57,26 +60,36 @@ export function TeacherDashboard() {
     queryFn: async () => {
       const [s, a] = await Promise.all([
         supabase.from("students").select("id, first_name, last_name, admission_no").eq("class_id", cur!.class_id).is("deleted_at", null).order("last_name"),
-        supabase.from("attendance_records").select("student_id, status").eq("class_id", cur!.class_id).eq("date", today()),
+        supabase.from("attendance_records").select("student_id, status, note").eq("class_id", cur!.class_id).eq("date", today()),
       ]);
       return { students: s.data ?? [], att: a.data ?? [] };
     },
   });
   const [marks, setMarks] = useState<Record<string, Status>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [reasonFor, setReasonFor] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [tt, setTt] = useState(false);
   useEffect(() => {
-    const m: Record<string, Status> = {};
-    for (const a of students.data?.att ?? []) m[a.student_id] = a.status;
-    setMarks(m);
+    const m: Record<string, Status> = {}; const n: Record<string, string> = {};
+    for (const a of students.data?.att ?? []) { m[a.student_id] = a.status; if (a.note) n[a.student_id] = a.note; }
+    setMarks(m); setNotes(n);
   }, [students.data]);
+  const setStatus = (id: string, x: Status) => { setMarks((m) => ({ ...m, [id]: x })); setReasonFor(x === "absent" || x === "excused" ? id : null); };
 
   const saveAttendance = async () => {
-    if (!cur || !schoolId || !on("attendance")) return;
-    const rows = (students.data?.students ?? []).map((s) => ({
-      school_id: schoolId, student_id: s.id, class_id: cur.class_id, date: today(), status: marks[s.id] ?? ("present" as Status), marked_by: user!.id,
-    }));
+    if (!cur || !schoolId || !on("attendance") || saving) return;
+    const wasSaved = !!students.data?.att.length;
+    const rows = (students.data?.students ?? []).map((s) => {
+      const status = marks[s.id] ?? ("present" as Status);
+      return { school_id: schoolId, student_id: s.id, class_id: cur.class_id, date: today(), status, note: status === "absent" || status === "excused" || status === "late" ? (notes[s.id] ?? null) : null, marked_by: user!.id };
+    });
+    setSaving(true);
     const { error } = await supabase.from("attendance_records").upsert(rows, { onConflict: "student_id,date" });
+    setSaving(false);
     if (error) { toast.error(error.message); return; }
-    toast.success(`Attendance saved for ${rows.length} learners — parents updated`);
+    setReasonFor(null);
+    toast.success(wasSaved ? "Saved register updated — parents see the new reasons" : `Attendance saved for ${rows.length} learners — parents updated`);
     void qc.invalidateQueries({ queryKey: ["class-students"] });
   };
 
@@ -176,9 +189,11 @@ export function TeacherDashboard() {
           <select className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm text-foreground" value={idx} onChange={(e) => setIdx(Number(e.target.value))}>
             {list.map((a, i) => a.classes?.grade === cur?.classes?.grade && <option key={a.class_id + a.subject_id} value={i}>{a.classes?.name} · {a.subjects?.name}</option>)}
           </select></label>
-        {cur && <Button size="sm" variant="secondary" className="shrink-0" onClick={() => setGlance(!glance)}>{glance ? "Back to marking" : "Class at a glance"}</Button>}
+        {cur && <Button size="sm" variant="secondary" className="shrink-0" onClick={() => { setGlance(!glance); setTt(false); }}>{glance ? "Back to marking" : "Class at a glance"}</Button>}
+        {schoolId && <Button size="sm" variant={tt ? "default" : "outline"} className="shrink-0" onClick={() => { setTt(!tt); setGlance(false); }}>Exams & extra classes</Button>}
       </div>
-      {glance && cur ? <ClassGlance classId={cur.class_id} className={cur.classes?.name ?? "Class"} /> : <>
+      {tt && schoolId ? <TimetablePanel schoolId={schoolId} /> : glance && cur ? <ClassGlance classId={cur.class_id} className={cur.classes?.name ?? "Class"} /> : <>
+      {cur && <ClassRisk classId={cur.class_id} onPick={setProfile} />}
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Learners" value={st.length} />
         {on("attendance") && <Stat label="Present (today)" value={present} />}
@@ -188,10 +203,11 @@ export function TeacherDashboard() {
         {(on("attendance") || on("marks")) && <Card title="Attendance & marks" className="lg:col-span-2">
           <div className="mb-3 flex flex-wrap gap-2">
             {on("attendance") && <Button size="sm" variant="outline" onClick={() => setMarks(Object.fromEntries(st.map((s) => [s.id, "present" as Status])))}>All present</Button>}
-            {on("attendance") && <Button size="sm" onClick={saveAttendance}>Save attendance</Button>}
+            {on("attendance") && <Button size="sm" disabled={saving} onClick={saveAttendance}>{saving ? "Saving…" : students.data?.att.length ? "Update saved register" : "Save attendance"}</Button>}
             {on("marks") && <Input className="h-9 w-48" placeholder="New assessment title" value={assess} onChange={(e) => setAssess(e.target.value)} />}
             {on("marks") && <Button size="sm" variant="secondary" onClick={publishMarks}>Publish marks</Button>}
           </div>
+          {on("attendance") && !!students.data?.att.length && <p className="mb-2 rounded bg-success/10 px-2 py-1 text-xs text-success">Today's register is saved. A parent phoned later? Tap A or E on the learner, choose a reason, then “Update saved register”.</p>}
           {on("attendance") && <div className="mb-3 flex flex-wrap items-center gap-2">
             {(["all", "absent", "late", "excused"] as const).map((f) => {
               const n = f === "all" ? st.length : st.filter((s) => (marks[s.id] ?? "present") === f).length;
@@ -203,11 +219,18 @@ export function TeacherDashboard() {
             <table className="w-full text-sm">
               <tbody>
                 {st.filter((s) => (stFilter === "all" || (marks[s.id] ?? "present") === stFilter) && (!stTerm.trim() || `${s.first_name} ${s.last_name} ${s.admission_no}`.toLowerCase().includes(stTerm.trim().toLowerCase()))).map((s) => (
-                  <tr key={s.id} className="border-b">
-                    <td className="py-1.5"><button type="button" className="text-left hover:text-primary hover:underline" onClick={() => setProfile(s)}>{s.last_name}, {s.first_name}</button> <span className="text-xs text-muted-foreground">{s.admission_no}</span></td>
+                  <tr key={s.id} className="border-b align-top">
+                    <td className="py-1.5"><button type="button" className="text-left hover:text-primary hover:underline" onClick={() => setProfile(s)}>{s.last_name}, {s.first_name}</button> <span className="text-xs text-muted-foreground">{s.admission_no}</span>
+                      {notes[s.id] && reasonFor !== s.id && ["absent", "excused", "late"].includes(marks[s.id] ?? "") && <button type="button" className="block text-xs text-muted-foreground hover:text-primary" onClick={() => setReasonFor(s.id)}>Reason: {notes[s.id]} ✎</button>}
+                      {reasonFor === s.id && <div className="mt-1 flex flex-wrap gap-1">
+                        {REASONS.map((r) => <button key={r} type="button" className={`rounded border px-1.5 py-0.5 text-xs ${notes[s.id] === r ? "border-primary bg-primary/15 text-primary" : "hover:bg-muted"}`} onClick={() => { setNotes((n) => ({ ...n, [s.id]: r })); setReasonFor(null); }}>{r}</button>)}
+                        <Input className="h-7 w-44 text-xs" placeholder="Other reason…" maxLength={200} value={REASONS.includes(notes[s.id] ?? "") ? "" : (notes[s.id] ?? "")} onChange={(e) => setNotes((n) => ({ ...n, [s.id]: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && setReasonFor(null)} />
+                        <button type="button" className="rounded px-1.5 py-0.5 text-xs text-muted-foreground underline" onClick={() => setReasonFor(null)}>Skip</button>
+                      </div>}
+                    </td>
                      {on("attendance") && <td className="whitespace-nowrap">
                       {STATUSES.map((x) => (
-                         <Button key={x} size="sm" variant={(marks[s.id] ?? "present") === x ? "default" : "ghost"} title={x} aria-label={`${s.first_name} ${s.last_name}: ${x}`} onClick={() => setMarks({ ...marks, [s.id]: x })}
+                         <Button key={x} size="sm" variant={(marks[s.id] ?? "present") === x ? "default" : "ghost"} title={x} aria-label={`${s.first_name} ${s.last_name}: ${x}`} onClick={() => setStatus(s.id, x)}
                            className="mr-1 h-7 w-7 p-0 uppercase">{x[0]}</Button>
                       ))}
                      </td>}
@@ -256,5 +279,40 @@ export function TeacherDashboard() {
       </>}
       {profile && <StudentRecord student={profile} onClose={() => setProfile(null)} />}
     </Shell>
+  );
+}
+
+type Lite = { id: string; first_name: string; last_name: string; admission_no: string };
+/** My Classes: one-tap lists of chronic absentees, late-comers and good attenders this term. */
+function ClassRisk({ classId, onPick }: { classId: string; onPick: (s: Lite) => void }) {
+  const [mode, setMode] = useState<"absent" | "late" | "good" | null>(null);
+  const q = useQuery({
+    queryKey: ["class-risk", classId],
+    queryFn: async () => {
+      const from = new Date(Date.now() - 92 * 86400000).toISOString().slice(0, 10);
+      const [{ data: st }, att] = await Promise.all([
+        supabase.from("students").select("id, first_name, last_name, admission_no").eq("class_id", classId).is("deleted_at", null),
+        (async () => { const out: { student_id: string; status: string }[] = []; for (let f = 0; f < 20000; f += 1000) { const { data } = await supabase.from("attendance_records").select("student_id, status").eq("class_id", classId).gte("date", from).order("id").range(f, f + 999); out.push(...(data ?? [])); if (!data || data.length < 1000) break; } return out; })(),
+      ]);
+      return (st ?? []).map((s) => { const a = att.filter((r) => r.student_id === s.id); const abs = a.filter((r) => r.status === "absent").length; const late = a.filter((r) => r.status === "late").length; const pct = a.length ? Math.round(((a.length - abs) / a.length) * 100) : 100; return { s, abs, late, pct, n: a.length }; });
+    },
+  });
+  const rows = q.data ?? [];
+  const lists = {
+    absent: rows.filter((r) => r.abs >= 3).sort((a, b) => b.abs - a.abs).map((r) => ({ r, t: `${r.abs} days absent` })),
+    late: rows.filter((r) => r.late >= 2).sort((a, b) => b.late - a.late).map((r) => ({ r, t: `${r.late}× late` })),
+    good: rows.filter((r) => r.n > 0 && r.pct >= 95).sort((a, b) => b.pct - a.pct).map((r) => ({ r, t: `${r.pct}%` })),
+  };
+  const btn = (k: "absent" | "late" | "good", label: string, cls: string) => (
+    <Button size="sm" variant={mode === k ? "default" : "outline"} className={mode === k ? "" : cls} onClick={() => setMode(mode === k ? null : k)}>{label} ({q.isLoading ? "…" : lists[k].length})</Button>
+  );
+  return (
+    <div className="mb-4 rounded-2xl border bg-card p-3">
+      <p className="mb-2 text-xs text-muted-foreground">This term in this class</p>
+      <div className="flex flex-wrap gap-2">{btn("absent", "Most absent (3+)", "text-destructive")}{btn("late", "Late-coming", "text-warning")}{btn("good", "Good attendance 95%+", "text-success")}</div>
+      {mode && <ul className="mt-2 max-h-60 divide-y overflow-y-auto text-sm">{lists[mode].length ? lists[mode].map(({ r, t }) => (
+        <li key={r.s.id}><button className="flex w-full justify-between py-1.5 text-left hover:text-primary" onClick={() => onPick(r.s)}><span className="truncate">{r.s.last_name}, {r.s.first_name} <span className="text-xs text-muted-foreground">{r.s.admission_no}</span></span><span className="shrink-0 text-xs">{t}</span></button></li>
+      )) : <li className="py-2 text-muted-foreground">Nobody in this list.</li>}</ul>}
+    </div>
   );
 }

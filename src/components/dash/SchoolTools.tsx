@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, Empty } from "./Shell";
 import { StudentRecord } from "./ClassGlance";
+import { useServerFn } from "@tanstack/react-start";
+import { bulkIngestStaff, type StaffResult, type StaffRow } from "@/lib/staff.functions";
+import { mapStaffRole, normalizeSaPhone } from "@/lib/staff-normalize";
 
 type Learner = { id: string; first_name: string; last_name: string; admission_no: string; classes?: { name: string } | null };
 
@@ -284,6 +287,135 @@ export function ParentLinker({ schoolId }: { schoolId: string }) {
           <Button className="w-full" onClick={link}>Link parent</Button>
         </>}
       </div>
+    </Card>
+  );
+}
+
+/** Principal: paste or upload a staff list and create logins in one go. */
+export function StaffIngest({ schoolId }: { schoolId: string }) {
+  const run = useServerFn(bulkIngestStaff);
+  const qc = useQueryClient();
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<StaffResult[] | null>(null);
+  const rows = parseStaff(text);
+  const loadFile = async (f: File) => {
+    const XLSX = await import("xlsx");
+    const wb = XLSX.read(await f.arrayBuffer());
+    const ws = wb.Sheets[wb.SheetNames[0]!]!;
+    setText(XLSX.utils.sheet_to_csv(ws));
+  };
+  const go = async () => {
+    if (busy || !rows.length) return;
+    setBusy(true);
+    try { const r = await run({ data: { schoolId, rows } }); setRes(r); toast.success(`${r.filter((x) => x.ok).length} of ${r.length} staff added`); void qc.invalidateQueries(); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Upload failed"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Card title="Bulk staff upload" className="lg:col-span-2">
+      <p className="mb-2 text-xs text-muted-foreground">Columns: Title, Full Name, Staff/Persal No, Cell, Email, Department/Subject, Role (Teacher, HOD, Deputy, Principal). Paste from Excel or upload a file.</p>
+      <input type="file" accept=".csv,.xlsx,.xls,.ods" className="mb-2 block text-sm" onChange={(e) => e.target.files?.[0] && void loadFile(e.target.files[0])} />
+      <Textarea rows={5} placeholder={"Title,Full Name,Persal No,Cell,Email,Department,Role\nMr,Sipho Nkosi,12345678,082 123 4567,sipho@school.co.za,Mathematics,Teacher"} value={text} onChange={(e) => setText(e.target.value)} />
+      {rows.length > 0 && (
+        <div className="mt-2 max-h-56 overflow-auto rounded border text-xs">
+          <table className="w-full"><tbody>{rows.map((r, i) => {
+            const bad = !r.full_name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email) || !mapStaffRole(r.role);
+            return <tr key={i} className={`border-b ${bad ? "text-destructive" : ""}`}><td className="p-1">{r.title} {r.full_name || "— name missing"}</td><td className="p-1">{r.email || "— email missing"}</td><td className="p-1">{normalizeSaPhone(r.phone ?? "") || r.phone}</td><td className="p-1">{r.department}</td><td className="p-1">{mapStaffRole(r.role) ? r.role || "Teacher" : `${r.role} (not yet)`}</td></tr>;
+          })}</tbody></table>
+        </div>
+      )}
+      <Button className="mt-2 w-full" disabled={busy || !rows.length} onClick={go}>{busy ? "Adding staff…" : `Add ${rows.length} staff`}</Button>
+      {res && <ul className="mt-2 max-h-40 overflow-y-auto text-xs">{res.map((r, i) => <li key={i} className={r.ok ? "text-success" : "text-destructive"}>{r.email}: {r.message}</li>)}</ul>}
+      <p className="mt-2 text-xs text-muted-foreground">Staff sign in with their email (Google or “forgot password”). Then assign class teachers below.</p>
+    </Card>
+  );
+}
+
+function parseStaff(text: string): StaffRow[] {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const split = (l: string) => (l.includes("\t") ? l.split("\t") : l.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)).map((c) => c.replace(/^"|"$/g, "").trim());
+  const first = split(lines[0]!).map((h) => h.toLowerCase());
+  const hasHeader = first.some((h) => /name|email/.test(h));
+  const idx = (re: RegExp, d: number) => { const i = first.findIndex((h) => re.test(h)); return hasHeader ? i : d; };
+  const col = { title: idx(/title/, 0), name: idx(/name/, 1), no: idx(/persal|staff/, 2), phone: idx(/cell|phone|mobile/, 3), email: idx(/mail/, 4), dep: idx(/dep|subject/, 5), role: idx(/role|design/, 6) };
+  return (hasHeader ? lines.slice(1) : lines).map(split).map((c) => ({
+    title: c[col.title] ?? "", full_name: c[col.name] ?? "", staff_no: c[col.no] ?? "", phone: c[col.phone] ?? "", email: (c[col.email] ?? "").toLowerCase(), department: c[col.dep] ?? "", role: c[col.role] ?? "",
+  }));
+}
+
+/** Principal: end-of-year rollover. Moves learners up one grade; history stays with the learner. */
+export function RolloverWizard({ schoolId }: { schoolId: string }) {
+  const qc = useQueryClient();
+  const [retain, setRetain] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const q = useQuery({
+    queryKey: ["rollover", schoolId],
+    queryFn: async () => {
+      const { data: classes } = await supabase.from("classes").select("id, name, grade").eq("school_id", schoolId);
+      const all: { id: string; class_id: string | null; admission_no: string }[] = [];
+      for (let f = 0; f < 20000; f += 1000) {
+        const { data } = await supabase.from("students").select("id, class_id, admission_no").eq("school_id", schoolId).is("deleted_at", null).range(f, f + 999);
+        all.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return { classes: classes ?? [], students: all };
+    },
+  });
+  const cls = q.data?.classes ?? [];
+  const byId = new Map(cls.map((c) => [c.id, c]));
+  const target = (c: { name: string; grade: string }) => {
+    const g = Number(c.grade);
+    if (!g) return undefined;
+    const suffix = c.name.replace(/^grade\s*/i, "").replace(String(g), "").trim();
+    return cls.find((x) => Number(x.grade) === g + 1 && x.name.replace(/^grade\s*/i, "").replace(String(g + 1), "").trim() === suffix);
+  };
+  const retained = new Set(retain.split(/[\s,;]+/).map((s) => s.trim().toUpperCase()).filter(Boolean));
+  const maxGrade = Math.max(0, ...cls.map((c) => Number(c.grade) || 0));
+  const plan = { promote: new Map<string, string[]>(), graduate: [] as string[], kept: 0, noTarget: new Set<string>() };
+  for (const s of q.data?.students ?? []) {
+    const c = s.class_id ? byId.get(s.class_id) : undefined;
+    if (!c || retained.has(s.admission_no.toUpperCase())) { plan.kept++; continue; }
+    if (Number(c.grade) === maxGrade && maxGrade >= 12) { plan.graduate.push(s.id); continue; }
+    const t = target(c);
+    if (!t) { plan.kept++; plan.noTarget.add(c.name); continue; }
+    plan.promote.set(t.id, [...(plan.promote.get(t.id) ?? []), s.id]);
+  }
+  const promoting = [...plan.promote.values()].reduce((n, a) => n + a.length, 0);
+  const apply = async () => {
+    if (confirm !== "ROLLOVER" || busy) return;
+    setBusy(true);
+    try {
+      // Graduates first so Grade 12 seats are free; ids are fixed upfront so nobody moves twice.
+      for (let i = 0; i < plan.graduate.length; i += 200) {
+        const { error } = await supabase.from("students").update({ deleted_at: new Date().toISOString() }).in("id", plan.graduate.slice(i, i + 200));
+        if (error) throw error;
+      }
+      for (const [cid, ids] of plan.promote) for (let i = 0; i < ids.length; i += 200) {
+        const { error } = await supabase.from("students").update({ class_id: cid }).in("id", ids.slice(i, i + 200));
+        if (error) throw error;
+      }
+      toast.success(`Rollover done: ${promoting} promoted, ${plan.graduate.length} matriculated (archived), ${plan.kept} kept in grade`);
+      setConfirm(""); void qc.invalidateQueries();
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Rollover failed — nothing after the error was changed"); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Card title="Year-end rollover" className="lg:col-span-2">
+      <p className="mb-2 text-xs text-muted-foreground">Moves every learner up one grade into the matching class (8A → 9A). Grade {maxGrade} learners become alumni (archived, still searchable in records). Attendance, marks and behaviour history stay with each learner. Prefer re-importing the January SA-SAMS register in the Control Centre if classes are reshuffled.</p>
+      {q.isLoading ? <Empty text="Preparing preview…" /> : <>
+        <div className="mb-2 grid grid-cols-3 gap-2 text-center text-sm">
+          <div className="rounded border p-2"><p className="font-display text-xl">{promoting}</p><p className="text-xs text-muted-foreground">promoted</p></div>
+          <div className="rounded border p-2"><p className="font-display text-xl">{plan.graduate.length}</p><p className="text-xs text-muted-foreground">matriculants</p></div>
+          <div className="rounded border p-2"><p className="font-display text-xl">{plan.kept}</p><p className="text-xs text-muted-foreground">stay in grade</p></div>
+        </div>
+        {plan.noTarget.size > 0 && <p className="mb-2 text-xs text-warning">No next-grade class found for: {[...plan.noTarget].slice(0, 12).join(", ")} — those learners stay put.</p>}
+        <Textarea rows={2} placeholder="Retained learners (repeat the grade): admission numbers, comma or line separated" value={retain} onChange={(e) => setRetain(e.target.value)} />
+        <Input className="mt-2" placeholder='Type ROLLOVER to confirm' value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        <Button className="mt-2 w-full" variant="destructive" disabled={confirm !== "ROLLOVER" || busy} onClick={apply}>{busy ? "Rolling over…" : "Run year-end rollover"}</Button>
+      </>}
     </Card>
   );
 }
