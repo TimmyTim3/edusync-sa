@@ -175,8 +175,19 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     const head = [["DEPARTMENT OF BASIC EDUCATION — LEARNER DISCIPLINE REGISTER"], ["Code of Conduct report (SASA s.8)"], [`Period: ${name}`], [`Generated: ${new Date(snap.generated_at).toLocaleString("en-ZA")}`], []];
-    const summary = XLSX.utils.aoa_to_sheet([...head, ["Measure", "Total"], ["Behaviour entries", snap.total], ["Merits", snap.positive], ["Demerits", snap.negative], [], ["Principal signature:", ""], ["Date:", ""]]);
-    summary["!cols"] = [{ wch: 30 }, { wch: 14 }];
+    const levels = new Map<string, { m: number; d: number }>();
+    for (const r of snap.register ?? []) {
+      const k = String(r.level ?? "—");
+      const v = levels.get(k) ?? { m: 0, d: 0 };
+      if (String(r.type).toLowerCase().startsWith("merit")) v.m++; else v.d++;
+      levels.set(k, v);
+    }
+    const summary = XLSX.utils.aoa_to_sheet([...head,
+      ["1. SUMMARY OF INCIDENTS"], ["Measure", "Total"], ["Behaviour entries", snap.total], ["Merits", snap.positive], ["Demerits / concerns", snap.negative], [],
+      ["2. SASA LEVEL BREAKDOWN"], ["Level", "Merits", "Demerits"], ...[...levels.entries()].sort().map(([k, v]) => [k, v.m, v.d]), [],
+      ["3. TOP REPEAT OFFENDERS"], ["Learner", "Incidents"], ...snap.offenders.slice(0, 10).map((x) => [x.label, x.count]), [],
+      ["4. SIGN-OFF"], ["Principal (name & signature):", ""], ["Chairperson, SGB Disciplinary Committee:", ""], ["Date:", ""], ["School stamp:", ""]]);
+    summary["!cols"] = [{ wch: 42 }, { wch: 14 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(wb, summary, "Summary");
     const reg = XLSX.utils.aoa_to_sheet([...head, ["No.", "Date", "Admission No", "Learner (Surname, Name)", "Grade", "Class", "Type", "Offence / Merit", "SASA Level", "Points", "Description"],
       ...(snap.register ?? []).map((r, i) => [i + 1, r.date, r.admission, r.learner, r.grade, r.cls, r.type, r.category, r.level, r.points, r.note])]);
