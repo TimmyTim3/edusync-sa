@@ -239,7 +239,7 @@ export function ParentLinker({ schoolId }: { schoolId: string }) {
   const links = useQuery({
     queryKey: ["learner-links", learner?.id],
     enabled: !!learner,
-    queryFn: async () => (await supabase.from("parent_student").select("id, relationship, is_primary, parents(full_name, phone)").eq("student_id", learner!.id)).data as unknown as { id: string; relationship: string; is_primary: boolean; parents: { full_name: string; phone: string | null } | null }[] ?? [],
+    queryFn: async () => (await supabase.from("parent_student").select("id, relationship, is_primary, parents(full_name, phone, email, user_id)").eq("student_id", learner!.id)).data as unknown as { id: string; relationship: string; is_primary: boolean; parents: { full_name: string; phone: string | null; email: string | null; user_id: string | null } | null }[] ?? [],
   });
   const link = async () => {
     if (!learner) return;
@@ -267,7 +267,7 @@ export function ParentLinker({ schoolId }: { schoolId: string }) {
           <div className="flex items-center justify-between rounded-md bg-secondary px-2 py-1.5"><span>{learner.first_name} {learner.last_name} · {learner.admission_no}</span><Button size="sm" variant="ghost" onClick={() => setLearner(null)}>Change</Button></div>
         ) : <LearnerSearch schoolId={schoolId} onPick={setLearner} />}
         {learner && <>
-          {!!links.data?.length && <ul className="text-xs text-muted-foreground">{links.data.map((l) => <li key={l.id} className="flex justify-between"><span>{l.parents?.full_name} ({l.relationship}{l.is_primary ? ", primary" : ""})</span><button className="text-destructive" onClick={() => unlink(l.id)}>Unlink</button></li>)}</ul>}
+          {!!links.data?.length && <ul className="text-xs text-muted-foreground">{links.data.map((l) => <li key={l.id} className="flex justify-between"><span>{l.parents?.full_name} ({l.relationship}{l.is_primary ? ", primary" : ""})</span><span className="flex gap-2">{l.parents?.user_id ? <span className="text-success">Account active</span> : <button className="text-primary" onClick={() => { const msg = `Hi ${l.parents?.full_name}, ${learner?.first_name}'s school uses EduSync. Sign up at ${window.location.origin}/auth with ${l.parents?.email ?? "your email address"} to see attendance, marks and notices.`; void navigator.clipboard.writeText(msg); if (l.parents?.phone) window.open(`https://wa.me/${l.parents.phone.replace(/\D/g, "").replace(/^0/, "27")}?text=${encodeURIComponent(msg)}`, "_blank"); toast.success("Invite copied"); }}>Invite</button>}<button className="text-destructive" onClick={() => unlink(l.id)}>Unlink</button></span></li>)}</ul>}
           <Input placeholder="Find parent by name, cell or email" value={pTerm} onChange={(e) => { setPTerm(e.target.value); setForm({ ...form, parent: "" }); }} />
           {pq.length >= 2 && <select className="h-9 w-full rounded-md border bg-background px-2" value={form.parent} onChange={(e) => setForm({ ...form, parent: e.target.value })}>
             <option value="">{parents.data?.length ? "Choose parent…" : "No match — add new below"}</option>
