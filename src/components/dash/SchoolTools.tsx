@@ -133,8 +133,8 @@ export function NoticesManager({ schoolId }: { schoolId: string }) {
   const q = useQuery({
     queryKey: ["notices-all", schoolId],
     queryFn: async () => {
-      const { data } = await supabase.from("notices").select("id, title, body, scope, priority, published_at, classes(name)").eq("school_id", schoolId).order("published_at", { ascending: false }).limit(300);
-      return (data ?? []) as unknown as { id: string; title: string; body: string; scope: string; priority: string; published_at: string; classes: { name: string } | null }[];
+      const { data } = await supabase.from("notices").select("id, title, body, scope, priority, published_at, classes(name), notice_reads(count)").eq("school_id", schoolId).order("published_at", { ascending: false }).limit(300);
+      return (data ?? []) as unknown as { id: string; title: string; body: string; scope: string; priority: string; published_at: string; classes: { name: string } | null; notice_reads: { count: number }[] }[];
     },
   });
   const refresh = () => { void qc.invalidateQueries({ queryKey: ["notices-all"] }); void qc.invalidateQueries({ queryKey: ["principal-stats"] }); };
@@ -166,7 +166,7 @@ export function NoticesManager({ schoolId }: { schoolId: string }) {
         ) : (
           <li key={n.id} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0"><p className="truncate font-medium">{n.priority === "urgent" && <span className="mr-1 rounded bg-destructive/15 px-1 text-xs text-destructive">Urgent</span>}{n.title}</p>
-              <p className="text-xs text-muted-foreground">{n.scope === "class" ? n.classes?.name ?? "Class" : n.scope} · {new Date(n.published_at).toLocaleString()}</p></div>
+              <p className="text-xs text-muted-foreground">{n.scope === "class" ? n.classes?.name ?? "Class" : n.scope} · {new Date(n.published_at).toLocaleString()} · read by {n.notice_reads?.[0]?.count ?? 0}</p></div>
             <div className="flex shrink-0 gap-1">
               <Button size="sm" variant="outline" onClick={() => setEdit({ id: n.id, title: n.title, body: n.body, urgent: n.priority === "urgent" })}>Edit</Button>
               <Button size="sm" variant="ghost" className="text-destructive" onClick={() => remove(n.id)}>Remove</Button>

@@ -16,6 +16,8 @@ type AuthState = {
   schoolId: string | null;
   primaryRole: AppRole | null;
   isPlatformAdmin: boolean;
+  availableRoles: AppRole[];
+  setViewAs: (r: AppRole) => void;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -28,6 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewAs, setViewAsState] = useState<AppRole | null>(null);
+  useEffect(() => { setViewAsState((localStorage.getItem("edusync-view-as") as AppRole | null) ?? null); }, []);
 
   const loadRoles = async (uid: string | undefined) => {
     if (!uid) {
@@ -58,7 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const email = session?.user?.email?.toLowerCase() ?? null;
-  const primaryRole = ROLE_PRIORITY.find((r) => roles.some((x) => x.role === r)) ?? null;
+  const availableRoles = ROLE_PRIORITY.filter((r) => roles.some((x) => x.role === r));
+  const primaryRole = (viewAs && availableRoles.includes(viewAs) ? viewAs : availableRoles[0]) ?? null;
   const schoolId = roles.find((r) => r.role === primaryRole)?.school_id ?? null;
 
   const value: AuthState = {
@@ -68,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     roles,
     schoolId,
     primaryRole,
+    availableRoles,
+    setViewAs: (r) => { localStorage.setItem("edusync-view-as", r); setViewAsState(r); },
     isPlatformAdmin: email === PLATFORM_ADMIN_EMAIL,
     refresh: async () => loadRoles(session?.user?.id),
     signOut: async () => {
