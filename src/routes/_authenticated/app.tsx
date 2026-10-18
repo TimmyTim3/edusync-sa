@@ -16,6 +16,26 @@ export const Route = createFileRoute("/_authenticated/app")({
 function AppHome() {
   const { loading, primaryRole, isPlatformAdmin, user, signOut } = useAuth();
   if (loading) return <div className="p-8"><Skeleton className="h-48 w-full" /></div>;
+  return <><RoleChip /><Dash /></>;
+}
+
+const roleLabel: Record<string, string> = { school_admin: "Principal", teacher: "Teacher", parent: "Parent", student: "Learner" };
+function RoleChip() {
+  const { availableRoles, primaryRole, setViewAs } = useAuth();
+  if (availableRoles.length < 2) return null;
+  return (
+    <div className="flex items-center justify-end gap-2 border-b bg-muted px-4 py-1.5 text-sm">
+      <span className="text-muted-foreground">Viewing as:</span>
+      <select className="rounded-md border bg-background px-2 py-1" value={primaryRole ?? ""} onChange={(e) => setViewAs(e.target.value as never)}>
+        {availableRoles.map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function Dash() {
+  const { loading, primaryRole, isPlatformAdmin, user, signOut } = useAuth();
+  if (loading) return <div className="p-8"><Skeleton className="h-48 w-full" /></div>;
   if (primaryRole === "school_admin") return isPlatformAdmin ? <><RemoteBanner /><PrincipalDashboard /></> : <PrincipalDashboard />;
   if (primaryRole === "teacher") return <TeacherDashboard />;
   if (primaryRole === "parent") return <ParentDashboard />;
