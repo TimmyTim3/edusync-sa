@@ -1,0 +1,2 @@
+create policy "staff read school notice reads" on public.notice_reads for select to authenticated
+using (exists (select 1 from public.notices n where n.id = notice_id and public.is_school_staff(n.school_id)));

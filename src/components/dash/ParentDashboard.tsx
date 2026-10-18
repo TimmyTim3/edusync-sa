@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -70,6 +70,11 @@ export function ParentDashboard() {
     return <Shell title="Family dashboard" lastUpdate={lastUpdate}><Card><Empty text="No children are linked to your account yet. Ask your school to link you." /></Card></Shell>;
 
   const d = detail.data;
+  const seen = (d?.notices ?? []).map((n) => n.id).join(",");
+  useEffect(() => {
+    if (!user || !seen) return;
+    void supabase.from("notice_reads").upsert(seen.split(",").map((notice_id) => ({ notice_id, user_id: user.id })), { onConflict: "notice_id,user_id", ignoreDuplicates: true });
+  }, [seen, user]);
   const att = d?.att ?? [];
   const pct = att.length ? Math.round((att.filter((a) => a.status === "present" || a.status === "late").length / att.length) * 100) : 0;
   const todayRec = att.find((a) => a.date === today());
