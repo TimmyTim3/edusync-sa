@@ -8,6 +8,7 @@ import { Shell, Card, Stat, Empty, today } from "./Shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { AttendanceCalendar } from "./AttendanceCalendar";
+import { ChildSchedule } from "./Timetable";
 
 type Child = { id: string; first_name: string; last_name: string; admission_no: string; photo_url: string | null; class_id: string | null; classes: { name: string } | null };
 
@@ -109,6 +110,11 @@ export function ParentDashboard() {
         {on("attendance") && (
           <Card title="Attendance history" className="lg:col-span-3">
             <AttendanceCalendar records={att} />
+          </Card>
+        )}
+        {child && (
+          <Card title="Exams & extra classes" className="lg:col-span-3">
+            <ChildSchedule studentId={child.id} classId={child.class_id} />
           </Card>
         )}
         {on("marks") && (
