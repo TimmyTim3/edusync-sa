@@ -1466,6 +1466,7 @@ export type Database = {
       is_school_member: { Args: { _school: string }; Returns: boolean }
       is_school_staff: { Args: { _school: string }; Returns: boolean }
       my_student_ids: { Args: never; Returns: string[] }
+      sa_phone_key: { Args: { p: string }; Returns: string }
       seed_demo_attendance_chunk: {
         Args: { p_from: string; p_school: string; p_to: string }
         Returns: number
