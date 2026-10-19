@@ -1,0 +1,2 @@
+DROP TRIGGER IF EXISTS on_auth_user_claim_parent ON auth.users;
+CREATE TRIGGER on_auth_user_claim_parent AFTER INSERT OR UPDATE OF email_confirmed_at, email, phone_confirmed_at, phone ON auth.users FOR EACH ROW EXECUTE FUNCTION public.claim_parent_records();
