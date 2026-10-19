@@ -89,10 +89,14 @@ function AuthPage() {
           EduSync
         </Link>
         <Tabs defaultValue={mode === "signup" ? "signup" : "signin"}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="signin">Sign in</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="signin">Email</TabsTrigger>
+            <TabsTrigger value="phone">Phone</TabsTrigger>
             <TabsTrigger value="signup">Create account</TabsTrigger>
           </TabsList>
+          <TabsContent value="phone">
+            <PhoneOtp />
+          </TabsContent>
           <TabsContent value="signin">
             <form onSubmit={signIn} className="mt-4 space-y-4">
               <div className="space-y-2">
