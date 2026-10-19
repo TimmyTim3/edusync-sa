@@ -8,6 +8,7 @@ import { Card, Empty } from "./Shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Json } from "@/integrations/supabase/types";
+import { DbeReport, DBE_LOGO_URL, registerCsv, reportHtml, useSchoolName } from "./DbeReport";
 
 type NoteRow = {
   id: string;
@@ -62,6 +63,7 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
   const [filters, setFilters] = useState({ from: monthsAgo(3), to: new Date().toISOString().slice(0, 10), grade: "", category: "" });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [busy, setBusy] = useState(false);
+  const school = useSchoolName(schoolId);
 
   const classes = useQuery({
     queryKey: ["disc-classes", schoolId],
@@ -202,6 +204,13 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
   };
 
   const grades = [...new Set((classes.data ?? []).map((c) => c.grade))].sort();
+  const schoolName = school.data?.name ?? "School";
+  const download = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
 
   return (
     <div className="space-y-4">
@@ -244,74 +253,29 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
       </Card>
 
       {snapshot && (
-        <Card title={`Report · ${filters.from} to ${filters.to}`}>
+        <Card title={`Official register · ${filters.from} to ${filters.to}`}>
           <div className="mb-4 flex flex-wrap gap-2 print:hidden">
-            <Button size="sm" variant="outline" onClick={() => void save(false)}>
-              <Save className="mr-2 h-4 w-4" />Save to archive
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => void save(true)}>
-              <Gavel className="mr-2 h-4 w-4" />Prepare for hearing
+            <Button size="sm" onClick={() => window.print()}>
+              <Printer className="mr-2 h-4 w-4" />PDF / Print
             </Button>
             <Button size="sm" variant="outline" onClick={() => void csv(snapshot, `disciplinary-${filters.from}-${filters.to}`)}>
-              <Download className="mr-2 h-4 w-4" />Excel register
+              <Download className="mr-2 h-4 w-4" />Excel
             </Button>
-            <Button size="sm" variant="outline" onClick={() => window.print()}>
-              <Printer className="mr-2 h-4 w-4" />Print / PDF
+            <Button size="sm" variant="outline" onClick={() => download(new Blob([reportHtml(snapshot, `${filters.from} to ${filters.to}`, schoolName, `${window.location.origin}${DBE_LOGO_URL}`)], { type: "application/msword" }), `disciplinary-${filters.from}-${filters.to}.doc`)}>
+              <Download className="mr-2 h-4 w-4" />Word
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => download(new Blob([registerCsv(snapshot)], { type: "text/csv;charset=utf-8" }), `disciplinary-${filters.from}-${filters.to}.csv`)}>
+              <Download className="mr-2 h-4 w-4" />CSV
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void save(false)}>
+              <Save className="mr-2 h-4 w-4" />Save to archive
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void save(true)}>
+              <Gavel className="mr-2 h-4 w-4" />Prepare for hearing
             </Button>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border p-3">
-              <p className="text-xs uppercase text-muted-foreground">Total notes</p>
-              <p className="font-display text-2xl font-semibold">{snapshot.total}</p>
-            </div>
-            <div className="rounded-xl border p-3">
-              <p className="text-xs uppercase text-muted-foreground">Positive</p>
-              <p className="font-display text-2xl font-semibold text-success">+{snapshot.positive}</p>
-            </div>
-            <div className="rounded-xl border p-3">
-              <p className="text-xs uppercase text-muted-foreground">Infractions</p>
-              <p className="font-display text-2xl font-semibold text-destructive">−{snapshot.negative}</p>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
-            <Section title="Most frequent offenders" items={snapshot.offenders} />
-            <Section title="Classes with most incidents" items={snapshot.classes} />
-            <Section title="Most common offences" items={snapshot.categories} />
-          </div>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <Section title="Weekly trend" items={snapshot.trend} />
-            <div>
-              <h3 className="mb-2 text-sm font-semibold">Serious incidents for hearing</h3>
-              {snapshot.serious.length === 0 ? (
-                <Empty text="No serious incidents in this period." />
-              ) : (
-                <ul className="divide-y text-sm">
-                  {snapshot.serious.map((s, i) => (
-                    <li key={i} className="py-2">
-                      <p className="font-medium">
-                        {s.student} <span className="text-muted-foreground">· {s.category}</span>
-                      </p>
-                      <p className="text-muted-foreground">
-                        {s.date} — {s.note}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-          {(snapshot.register ?? []).length > 0 && (
-            <div className="mt-4">
-              <h3 className="mb-2 text-sm font-semibold">Learner discipline register</h3>
-              <div className="max-h-96 overflow-auto rounded-md border print:max-h-none"><table className="w-full min-w-[760px] text-left text-xs">
-                <thead className="sticky top-0 bg-muted text-muted-foreground"><tr>{["Date", "Adm No", "Learner", "Gr/Class", "Type", "Offence / Merit", "Level", "Pts", "Description"].map((h) => <th key={h} className="p-2">{h}</th>)}</tr></thead>
-                <tbody>{snapshot.register!.slice(0, 300).map((r, i) => <tr key={i} className="border-t align-top">
-                  <td className="p-2 whitespace-nowrap">{r.date}</td><td className="p-2">{r.admission || "—"}</td><td className="p-2">{r.learner}</td><td className="p-2">{r.cls || r.grade}</td>
-                  <td className={`p-2 ${r.type === "Merit" ? "text-success" : "text-destructive"}`}>{r.type}</td><td className="p-2">{r.category}</td><td className="p-2">{r.level}</td><td className="p-2">{r.points}</td><td className="p-2">{r.note}</td>
-                </tr>)}</tbody>
-              </table></div>
-            </div>
-          )}
+          <p className="mb-2 text-xs text-muted-foreground print:hidden">For PDF: tap "PDF / Print", then choose "Save as PDF".</p>
+          <DbeReport snapshot={snapshot} period={`${filters.from} to ${filters.to}`} school={schoolName} />
         </Card>
       )}
 

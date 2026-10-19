@@ -220,3 +220,11 @@ html[data-theme="slate"] {
   --accent: oklch(0.68 0.12 295); --accent-foreground: oklch(0.2 0.02 270);
   --border: oklch(0.4 0.02 260); --input: oklch(0.4 0.02 260); --ring: oklch(0.7 0.13 280);
 }
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body:has(.dbe-print) * { visibility: hidden; }
+  .dbe-print, .dbe-print * { visibility: visible; }
+  .dbe-print { position: absolute; left: 0; top: 0; width: 100%; max-width: none; box-shadow: none; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .dbe-print tr { break-inside: avoid; }
+}
