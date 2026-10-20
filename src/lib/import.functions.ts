@@ -6,11 +6,12 @@ import { normStatus, normSeverity } from "./import-normalize";
 const opt = (n: number) => z.string().trim().max(n).optional().default("");
 const Row = z.object({
   first_name: z.string().trim().min(1).max(80),
-  last_name: z.string().trim().min(1).max(80),
-  admission_no: z.string().trim().min(1).max(40),
+  last_name: z.string().trim().max(80).optional().default(""),
+  admission_no: z.string().trim().max(40).optional().default(""),
   grade: z.string().trim().min(1).max(20),
   class_name: opt(40),
-  date_of_birth: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
+  // Bad or partial dates never fail a row; they are stored empty and flagged for completion.
+  date_of_birth: z.string().optional().default("").transform((v) => (/^\d{4}-\d{2}-\d{2}$/.test(v.trim()) && !isNaN(Date.parse(v.trim())) ? v.trim() : "")),
   gender: opt(20),
   parent_name: opt(120),
   parent_phone: opt(30),
@@ -65,7 +66,12 @@ export const importLearners = createServerFn({ method: "POST" })
     };
 
     const seen = new Map<string, (typeof data.rows)[number]>();
-    for (const r of data.rows) seen.set(r.admission_no.toUpperCase(), r);
+    const stamp = Date.now().toString(36).toUpperCase();
+    data.rows.forEach((r, i) => {
+      // Missing or masked IDs (e.g. 13120220XXXX) get a provisional number so the learner still imports.
+      if (!r.admission_no || /x{2,}/i.test(r.admission_no)) r.admission_no = `PROV-${stamp}-${i + 1}`;
+      seen.set(r.admission_no.toUpperCase(), r);
+    });
     const uniq = [...seen.values()];
     const records = [];
     for (const r of uniq) {
