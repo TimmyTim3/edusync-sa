@@ -419,3 +419,74 @@ export function RolloverWizard({ schoolId }: { schoolId: string }) {
     </Card>
   );
 }
+
+type Gap = { id: string; first_name: string; last_name: string; admission_no: string; date_of_birth: string | null; gender: string | null; classes: { name: string } | null };
+const gapsOf = (s: Gap) => [
+  s.admission_no.startsWith("PROV-") && "ID number",
+  !s.last_name && "surname",
+  !s.date_of_birth && "birth date",
+  !s.gender && "gender",
+].filter(Boolean) as string[];
+
+/** Learners imported with gaps; each can be fixed in place now or later. */
+export function NeedsCompletion({ schoolId }: { schoolId: string }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [edit, setEdit] = useState<Gap | null>(null);
+  const q = useQuery({
+    queryKey: ["needs-completion", schoolId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("students")
+        .select("id, first_name, last_name, admission_no, date_of_birth, gender, classes(name)")
+        .eq("school_id", schoolId).is("deleted_at", null)
+        .or("admission_no.like.PROV-%,last_name.eq.,date_of_birth.is.null,gender.is.null")
+        .order("last_name").limit(500);
+      if (error) throw error;
+      return (data ?? []) as Gap[];
+    },
+  });
+  const list = q.data ?? [];
+  const save = async () => {
+    if (!edit) return;
+    const { error } = await supabase.from("students").update({
+      first_name: edit.first_name.trim(), last_name: edit.last_name.trim(), admission_no: edit.admission_no.trim(),
+      date_of_birth: edit.date_of_birth || null, gender: edit.gender || null,
+    }).eq("id", edit.id);
+    if (error) { toast.error(error.message.includes("duplicate") ? "That admission number is already used by another learner" : error.message); return; }
+    toast.success("Learner updated"); setEdit(null);
+    void qc.invalidateQueries({ queryKey: ["needs-completion", schoolId] });
+  };
+  return (
+    <Card title="Learner records">
+      <Button variant={open ? "default" : "outline"} size="sm" onClick={() => setOpen(!open)}>
+        Needs completion <span className="ml-2 rounded-full bg-warning px-2 text-xs text-warning-foreground">{list.length}{list.length === 500 ? "+" : ""}</span>
+      </Button>
+      {open && (list.length === 0 ? <Empty text="Every learner record is complete." /> : (
+        <ul className="mt-3 max-h-96 divide-y overflow-y-auto rounded-md border text-sm">
+          {list.map((s) => (
+            <li key={s.id} className="flex items-center justify-between gap-2 p-2">
+              <div className="min-w-0"><p className="truncate font-medium">{s.last_name || "—"}, {s.first_name} <span className="text-xs text-muted-foreground">{s.classes?.name ?? ""}</span></p>
+                <p className="text-xs text-warning-foreground">Missing: {gapsOf(s).join(", ")}</p></div>
+              <Button size="sm" variant="outline" onClick={() => setEdit({ ...s, admission_no: s.admission_no.startsWith("PROV-") ? "" : s.admission_no })}>Edit</Button>
+            </li>
+          ))}
+        </ul>
+      ))}
+      {edit && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 p-4" onClick={() => setEdit(null)}>
+          <div className="w-full max-w-md space-y-2 rounded-xl border bg-card p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between"><h3 className="font-semibold">Complete learner record</h3><button aria-label="Close" onClick={() => setEdit(null)}><X className="h-4 w-4" /></button></div>
+            <Input aria-label="First name" placeholder="First name" value={edit.first_name} onChange={(e) => setEdit({ ...edit, first_name: e.target.value })} />
+            <Input aria-label="Surname" placeholder="Surname" value={edit.last_name} onChange={(e) => setEdit({ ...edit, last_name: e.target.value })} />
+            <Input aria-label="Admission or ID number" placeholder="Admission / ID number" value={edit.admission_no} onChange={(e) => setEdit({ ...edit, admission_no: e.target.value })} />
+            <Input aria-label="Birth date" type="date" value={edit.date_of_birth ?? ""} onChange={(e) => setEdit({ ...edit, date_of_birth: e.target.value })} />
+            <select aria-label="Gender" className="h-10 w-full rounded-md border bg-background px-2 text-sm" value={edit.gender ?? ""} onChange={(e) => setEdit({ ...edit, gender: e.target.value })}>
+              <option value="">Gender…</option><option value="M">Male</option><option value="F">Female</option>
+            </select>
+            <Button className="w-full" disabled={!edit.first_name.trim() || !edit.admission_no.trim()} onClick={() => void save()}>Save</Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
