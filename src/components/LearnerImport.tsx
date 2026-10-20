@@ -32,7 +32,8 @@ const ALIASES: Record<Mode, Record<string, string[]>> = {
   },
 };
 const REQUIRED: Record<Mode, string[]> = {
-  learners: ["first_name", "last_name", "admission_no", "grade"],
+  // Only a name and grade are truly required; everything else imports as-is and is flagged for completion.
+  learners: ["first_name", "grade"],
   attendance: ["date", "admission_no", "status"],
   behaviour: ["date", "admission_no", "category", "points"],
 };
@@ -48,6 +49,17 @@ const INFO: Record<Mode, { title: string; text: string }> = {
 };
 
 const isComplete = (mode: Mode, o: Raw) => REQUIRED[mode].every((f) => o[f] !== "" && o[f] !== undefined && o[f] !== null);
+/** Non-blocking gaps on a learner row (shown as warnings; the row still imports). */
+export function warnings(o: Raw): string[] {
+  const w: string[] = [];
+  const adm = String(o["admission_no"] ?? "");
+  if (!adm || /x{2,}/i.test(adm)) w.push("ID number missing");
+  if (!o["last_name"]) w.push("surname missing");
+  if (!o["date_of_birth"]) w.push("birth date missing");
+  if (!o["gender"]) w.push("gender missing");
+  if (!o["parent_phone"] && !o["parent_email"]) w.push("parent contact missing");
+  return w;
+}
 
 function mapRows(mode: Mode, raw: Raw[]): { rows: Raw[]; bad: Raw[]; missing: string[] } {
   const headers = Object.keys(raw[0] ?? {});
@@ -258,12 +270,12 @@ export function LearnerImport({ schools }: { schools: { id: string; name: string
         </div>
       )}
       {rows.length > 0 && <>
-        <p className="text-sm">{rows.length} rows ready{bad.length ? ` · ${bad.length} still need fixing (not included yet)` : ""}. Preview of the first 10:</p>
+        <p className="text-sm">{rows.length} rows ready{mode === "learners" && rows.some((r) => warnings(r).length) ? ` · ${rows.filter((r) => warnings(r).length).length} have gaps and will import as-is (fix later under "Needs completion")` : ""}{bad.length ? ` · ${bad.length} held back (no name or grade)` : ""}. Preview of the first 10:</p>
         <div className="overflow-x-auto rounded-md border"><table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-muted text-muted-foreground"><tr>{cols.map((h) => <th key={h} className="p-2 capitalize">{h.replace(/_/g, " ")}</th>)}</tr></thead>
-          <tbody>{rows.slice(0, 10).map((r, i) => <tr key={i} className="border-t">{cols.map((c) => <td key={c} className="p-2">{String(r[c] ?? "") || "—"}</td>)}</tr>)}</tbody>
+          <thead className="bg-muted text-muted-foreground"><tr>{mode === "learners" && <th className="p-2">Status</th>}{cols.map((h) => <th key={h} className="p-2 capitalize">{h.replace(/_/g, " ")}</th>)}</tr></thead>
+          <tbody>{rows.slice(0, 10).map((r, i) => <tr key={i} className="border-t">{mode === "learners" && <td className="p-2 text-xs">{warnings(r).length ? <span className="rounded bg-warning/15 px-1.5 py-0.5 text-warning-foreground">Imports — {warnings(r).join(", ")}</span> : <span className="text-success">Complete</span>}</td>}{cols.map((c) => <td key={c} className="p-2">{String(r[c] ?? "") || "—"}</td>)}</tr>)}</tbody>
         </table></div>
-        <Button disabled={!school || busy} onClick={() => void submit()}>{busy ? "Importing…" : `Import ${rows.length} rows`}</Button>
+        <Button disabled={!school || busy} onClick={() => void submit()}>{busy ? "Importing…" : mode === "learners" ? `Import all ${rows.length} learners` : `Import ${rows.length} rows`}</Button>
       </>}
     </div>
   );
