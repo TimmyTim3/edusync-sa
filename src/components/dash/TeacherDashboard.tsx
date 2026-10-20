@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ClassGlance, StudentRecord } from "./ClassGlance";
 import { LearnerSearch } from "./SchoolTools";
 import { TimetablePanel } from "./Timetable";
+import { HomeworkCheckoff } from "./HomeworkCheckoff";
 
 const REASONS = ["Sick / medical", "Doctor or clinic", "Transport problem", "Family emergency", "Bereavement", "Weather", "Religious / cultural", "Unexplained"];
 
@@ -250,6 +251,7 @@ export function TeacherDashboard() {
               <Button className="w-full" onClick={addHomework}>Post homework</Button>
             </div>
           </Card>}
+          {on("homework") && cur && schoolId && user && <HomeworkCheckoff schoolId={schoolId} classId={cur.class_id} students={st} userId={user.id} />}
           {on("behaviour") && <Card title="Behaviour note">
             <div className="space-y-2">
               <select className="h-9 w-full rounded-md border bg-background px-2 text-sm" value={beh.student} onChange={(e) => setBeh({ ...beh, student: e.target.value })}>
