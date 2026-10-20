@@ -8,7 +8,7 @@ import { useFeatureFlags } from "@/lib/features";
 import { Shell, Card, Stat, today } from "./Shell";
 import { DisciplinaryReports } from "./DisciplinaryReports";
 import { ClassGlance } from "./ClassGlance";
-import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NoticesManager, ParentLinker, RolloverWizard, StaffIngest } from "./SchoolTools";
+import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NeedsCompletion, NoticesManager, ParentLinker, RolloverWizard, StaffIngest } from "./SchoolTools";
 import { TimetablePanel } from "./Timetable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -146,6 +146,7 @@ export function PrincipalDashboard() {
           </ul>
         </Card>}
         {on("notices") && schoolId && <NoticesManager schoolId={schoolId} />}
+        {schoolId && <NeedsCompletion schoolId={schoolId} />}
         {schoolId && <ParentLinker schoolId={schoolId} />}
         {schoolId && <ClassTeacherAssign schoolId={schoolId} />}
       </div>
