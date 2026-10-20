@@ -49,7 +49,7 @@ export function HomeworkCheckoff({ schoolId, classId, students, userId }: { scho
 
   return (
     <Card title="Check homework hand-ins">
-      {!hw.data?.length ? <Empty>No homework set for this class yet.</Empty> : (
+      {!hw.data?.length ? <Empty text="No homework set for this class yet." /> : (
         <ul className="divide-y text-sm">
           {hw.data.map((h) => (
             <li key={h.id} className="flex items-center justify-between gap-2 py-2">

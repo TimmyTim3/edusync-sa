@@ -461,7 +461,7 @@ export function NeedsCompletion({ schoolId }: { schoolId: string }) {
       <Button variant={open ? "default" : "outline"} size="sm" onClick={() => setOpen(!open)}>
         Needs completion <span className="ml-2 rounded-full bg-warning px-2 text-xs text-warning-foreground">{list.length}{list.length === 500 ? "+" : ""}</span>
       </Button>
-      {open && (list.length === 0 ? <Empty>Every learner record is complete.</Empty> : (
+      {open && (list.length === 0 ? <Empty text="Every learner record is complete." /> : (
         <ul className="mt-3 max-h-96 divide-y overflow-y-auto rounded-md border text-sm">
           {list.map((s) => (
             <li key={s.id} className="flex items-center justify-between gap-2 p-2">
