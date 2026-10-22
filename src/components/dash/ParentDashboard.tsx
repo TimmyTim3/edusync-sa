@@ -81,7 +81,7 @@ export function ParentDashboard() {
   const pct = att.length ? Math.round((att.filter((a) => a.status === "present" || a.status === "late").length / att.length) * 100) : 0;
   const todayRec = att.find((a) => a.date === today());
   const marks = (d?.marks ?? []) as unknown as { score: number | null; assessments: { title: string; max_marks: number; date: string; subjects: { name: string } | null } | null }[];
-  const avg = marks.length ? Math.round(marks.reduce((s, m) => s + ((m.score ?? 0) / (m.assessments?.max_marks ?? 100)) * 100, 0) / marks.length) : 0;
+  const avg = marks.length ? Math.floor(1e-9 + marks.reduce((s, m) => s + ((m.score ?? 0) / (m.assessments?.max_marks ?? 100)) * 100, 0) / marks.length) : 0;
   const hw = d?.hw ?? [];
   const upcoming = hw.filter((h) => h.due_date >= today());
   const overdue = hw.filter((h) => h.due_date < today()).slice(-5);
@@ -129,7 +129,7 @@ export function ParentDashboard() {
             {marks.length ? (
               <ul className="divide-y text-sm">
                 {marks.slice(0, 10).map((m, i) => {
-                  const p = Math.round(((m.score ?? 0) / (m.assessments?.max_marks ?? 100)) * 100);
+                  const p = Math.floor(1e-9 + ((m.score ?? 0) / (m.assessments?.max_marks ?? 100)) * 100);
                   return (
                     <li key={i} className="flex items-center gap-3 py-2">
                       <span className="w-40 truncate font-medium">{m.assessments?.subjects?.name}</span>
