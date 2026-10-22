@@ -108,6 +108,15 @@ export function PrincipalDashboard() {
       <>
       <div className="mb-4"><LearnerSearch schoolId={schoolId} /></div>
       <p className="mb-3 text-xs text-muted-foreground">Tip: tap any class below to open its Class at a Glance, or tap Behaviour to see every merit and concern.</p>
+      <details className="mb-4 rounded-md border bg-card p-3 text-xs">
+        <summary className="cursor-pointer font-medium" aria-label="How marks are calculated">ⓘ Marks follow SA-SAMS &amp; NPPPR rules</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+          <li>Final marks are <b>truncated, never rounded up</b> — 49.6% shows as 49%, exactly like SA-SAMS, so a parent never sees a pass that SA-SAMS records as a fail.</li>
+          <li>Weighting (SBA / exam): Grades 4–6 75/25 · Grades 7–9 40/60 · Grades 10–12 25/75 · Grades R–3 100% SBA.</li>
+          <li>Achievement levels use the DBE 7-point scale (Level 4 = 50–59%).</li>
+          <li>Promotion and condonation decisions stay with the school's official SA-SAMS schedule.</li>
+        </ul>
+      </details>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="Learners" value={s?.students.toLocaleString() ?? "…"} />
         <Stat label="Parents" value={s?.parents.toLocaleString() ?? "…"} />
