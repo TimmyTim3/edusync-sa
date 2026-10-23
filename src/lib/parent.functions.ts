@@ -69,13 +69,10 @@ export const reportAbsence = createServerFn({ method: "POST" })
     const admin = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
     if (!data.date) throw new Error("Choose the day of the absence");
     if (data.date > new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)) throw new Error("Absences can be reported at most two weeks ahead");
-    const { data: link } = await admin.from("parent_student").select("id").eq("student_id", data.studentId).limit(1)
-      .then(async (r) => {
-        if (!r.data?.length) return r;
-        const { data: p } = await admin.from("parents").select("id").in("id", (await admin.from("parent_student").select("parent_id").eq("student_id", data.studentId)).data?.map((x) => x.parent_id) ?? []).eq("user_id", context.userId).limit(1);
-        return { data: p, error: null };
-      });
-    if (!link?.data?.length) throw new Error("This learner is not linked to your account");
+    const { data: parentIds } = await admin.from("parent_student").select("parent_id").eq("student_id", data.studentId);
+    if (!parentIds?.length) throw new Error("This learner is not linked to your account");
+    const { data: link } = await admin.from("parents").select("id").in("id", parentIds.map((p) => p.parent_id)).eq("user_id", context.userId).limit(1);
+    if (!link?.length) throw new Error("This learner is not linked to your account");
     const { data: stu } = await admin.from("students").select("school_id, class_id").eq("id", data.studentId).single();
     if (!stu) throw new Error("Learner not found");
     const { data: existing } = await admin.from("attendance_records").select("status").eq("student_id", data.studentId).eq("date", data.date).maybeSingle();
