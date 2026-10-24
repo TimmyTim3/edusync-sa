@@ -8,7 +8,7 @@ import { useFeatureFlags } from "@/lib/features";
 import { Shell, Card, Stat, today } from "./Shell";
 import { DisciplinaryReports } from "./DisciplinaryReports";
 import { ClassGlance } from "./ClassGlance";
-import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NeedsCompletion, NoticesManager, ParentLinker, RolloverWizard, StaffIngest } from "./SchoolTools";
+import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NeedsCompletion, NoticesManager, ParentLinker, ReliefManager, RolloverWizard, StaffIngest, SubjectAllocation } from "./SchoolTools";
 import { PromotionPreview } from "./BundleB";
 import { TimetablePanel } from "./Timetable";
 import { Button } from "@/components/ui/button";
@@ -100,7 +100,7 @@ export function PrincipalDashboard() {
       {tab === "timetable" && schoolId ? (
         <TimetablePanel schoolId={schoolId} />
       ) : tab === "staff" && schoolId ? (
-        <div className="grid gap-4 lg:grid-cols-2"><StaffIngest schoolId={schoolId} /><ClassTeacherAssign schoolId={schoolId} /><RolloverWizard schoolId={schoolId} /><PromotionPreview schoolId={schoolId} /></div>
+        <div className="grid gap-4 lg:grid-cols-2"><StaffIngest schoolId={schoolId} /><ClassTeacherAssign schoolId={schoolId} /><SubjectAllocation schoolId={schoolId} /><ReliefManager schoolId={schoolId} /><RolloverWizard schoolId={schoolId} /><PromotionPreview schoolId={schoolId} /></div>
       ) : tab === "discipline" ? (
         <DisciplinaryReports schoolId={schoolId} />
       ) : glance ? (
@@ -158,7 +158,7 @@ export function PrincipalDashboard() {
         {on("notices") && schoolId && <NoticesManager schoolId={schoolId} />}
         {schoolId && <NeedsCompletion schoolId={schoolId} />}
         {schoolId && <ParentLinker schoolId={schoolId} />}
-        {schoolId && <ClassTeacherAssign schoolId={schoolId} />}
+        {schoolId && <ClassTeacherAssign schoolId={schoolId} /><SubjectAllocation schoolId={schoolId} /><ReliefManager schoolId={schoolId} />}
       </div>
       </>
       )}

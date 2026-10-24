@@ -36,8 +36,12 @@ export function TeacherDashboard() {
     queryKey: ["assigns", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data } = await supabase.from("class_subject_teachers").select("class_id, subject_id, classes(name, grade), subjects(name)").eq("teacher_id", user!.id);
-      return ((data ?? []) as unknown as Assign[]).sort((a, b) => Number(a.classes?.grade) - Number(b.classes?.grade) || (a.classes?.name ?? "").localeCompare(b.classes?.name ?? ""));
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: cover } = await supabase.from("relief_assignments").select("absent_teacher_id").eq("relief_teacher_id", user!.id).is("revoked_at", null).lte("starts_on", today).gte("ends_on", today);
+      const ids = [user!.id, ...(cover ?? []).map((c) => c.absent_teacher_id)];
+      const { data } = await supabase.from("class_subject_teachers").select("class_id, subject_id, classes(name, grade), subjects(name)").in("teacher_id", ids);
+      const seen = new Set<string>();
+      return ((data ?? []) as unknown as Assign[]).filter((a) => { const k = a.class_id + a.subject_id; if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => Number(a.classes?.grade) - Number(b.classes?.grade) || (a.classes?.name ?? "").localeCompare(b.classes?.name ?? ""));
     },
   });
   const list = assigns.data ?? [];

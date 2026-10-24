@@ -490,3 +490,92 @@ export function NeedsCompletion({ schoolId }: { schoolId: string }) {
     </Card>
   );
 }
+
+/** Principal: allocate teachers to subjects per class (a teacher may hold many subjects/classes). */
+export function SubjectAllocation({ schoolId }: { schoolId: string }) {
+  const qc = useQueryClient();
+  const t = useTeachers(schoolId);
+  const [f, setF] = useState({ teacher: "", subject: "", classes: [] as string[] });
+  const subjects = useQuery({ queryKey: ["subjects", schoolId], queryFn: async () => (await supabase.from("subjects").select("id, name").eq("school_id", schoolId).order("name")).data ?? [] });
+  const classes = useQuery({ queryKey: ["classes-teachers", schoolId], queryFn: async () => (await supabase.from("classes").select("id, name, grade, class_teacher_id").eq("school_id", schoolId).order("grade").order("name")).data ?? [] });
+  const rows = useQuery({
+    queryKey: ["allocations", schoolId, f.teacher], enabled: !!f.teacher,
+    queryFn: async () => (await supabase.from("class_subject_teachers").select("id, classes(name), subjects(name)").eq("school_id", schoolId).eq("teacher_id", f.teacher)).data ?? [],
+  });
+  const add = async () => {
+    if (!f.teacher || !f.subject || !f.classes.length) { toast.error("Choose a teacher, a subject and at least one class"); return; }
+    const { data: existing } = await supabase.from("class_subject_teachers").select("class_id").eq("subject_id", f.subject).eq("teacher_id", f.teacher).in("class_id", f.classes);
+    const have = new Set((existing ?? []).map((e) => e.class_id));
+    const ins = f.classes.filter((c) => !have.has(c)).map((c) => ({ school_id: schoolId, teacher_id: f.teacher, subject_id: f.subject, class_id: c }));
+    if (ins.length) { const { error } = await supabase.from("class_subject_teachers").insert(ins); if (error) { toast.error(error.message); return; } }
+    toast.success(`${ins.length} allocation(s) added`); setF({ ...f, classes: [] });
+    void qc.invalidateQueries({ queryKey: ["allocations"] });
+  };
+  const remove = async (id: string) => {
+    const { error } = await supabase.from("class_subject_teachers").delete().eq("id", id);
+    if (error) toast.error(error.message); else void qc.invalidateQueries({ queryKey: ["allocations"] });
+  };
+  const sel = "h-9 w-full rounded-md border bg-background px-2 text-sm";
+  return (
+    <Card title="Subject allocations">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select aria-label="Teacher" className={sel} value={f.teacher} onChange={(e) => setF({ ...f, teacher: e.target.value })}><option value="">Choose teacher…</option>{(t.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.full_name || p.email}</option>)}</select>
+        <select aria-label="Subject" className={sel} value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })}><option value="">Choose subject…</option>{(subjects.data ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+      </div>
+      <div className="mt-2 flex max-h-32 flex-wrap gap-1 overflow-y-auto">
+        {(classes.data ?? []).map((c) => { const on = f.classes.includes(c.id); return (
+          <button key={c.id} type="button" aria-pressed={on} onClick={() => setF({ ...f, classes: on ? f.classes.filter((x) => x !== c.id) : [...f.classes, c.id] })}
+            className={`rounded-md border px-2 py-0.5 text-xs ${on ? "bg-primary text-primary-foreground" : "bg-background"}`}>{c.name}</button>); })}
+      </div>
+      <Button size="sm" className="mt-2" onClick={add}>Add allocation</Button>
+      {f.teacher && <ul className="mt-3 max-h-56 divide-y overflow-y-auto text-sm">
+        {(rows.data ?? []).length === 0 ? <Empty>No subjects allocated yet.</Empty> : (rows.data ?? []).map((r) => {
+          const x = r as unknown as { id: string; classes: { name: string } | null; subjects: { name: string } | null };
+          return <li key={x.id} className="flex items-center justify-between py-1"><span>{x.subjects?.name} — {x.classes?.name}</span><Button size="sm" variant="ghost" onClick={() => remove(x.id)}>Remove</Button></li>;
+        })}
+      </ul>}
+    </Card>
+  );
+}
+
+/** Principal: temporary, audited relief cover using the relief teacher's own login. */
+export function ReliefManager({ schoolId }: { schoolId: string }) {
+  const qc = useQueryClient();
+  const t = useTeachers(schoolId);
+  const today = new Date().toISOString().slice(0, 10);
+  const [f, setF] = useState({ absent: "", relief: "", from: today, to: today, reason: "Sick leave" });
+  const list = useQuery({ queryKey: ["relief", schoolId], queryFn: async () => (await supabase.from("relief_assignments").select("*").eq("school_id", schoolId).is("revoked_at", null).gte("ends_on", today).order("starts_on")).data ?? [] });
+  const name = (id: string) => { const p = (t.data ?? []).find((x) => x.id === id); return p?.full_name || p?.email || "Teacher"; };
+  const save = async () => {
+    if (!f.absent || !f.relief || f.absent === f.relief) { toast.error("Choose two different teachers"); return; }
+    if (f.to < f.from) { toast.error("End date must be on or after the start date"); return; }
+    const { error } = await supabase.from("relief_assignments").insert({ school_id: schoolId, absent_teacher_id: f.absent, relief_teacher_id: f.relief, starts_on: f.from, ends_on: f.to, reason: f.reason });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Relief cover granted"); void qc.invalidateQueries({ queryKey: ["relief"] });
+  };
+  const revoke = async (id: string) => {
+    const { error } = await supabase.from("relief_assignments").update({ revoked_at: new Date().toISOString() }).eq("id", id);
+    if (error) toast.error(error.message); else { toast.success("Relief cover ended"); void qc.invalidateQueries({ queryKey: ["relief"] }); }
+  };
+  const sel = "h-9 w-full rounded-md border bg-background px-2 text-sm";
+  return (
+    <Card title="Relief teacher cover">
+      <p className="mb-2 text-xs text-muted-foreground">The relief teacher uses their own login and gets the absent teacher's classes only for these dates. Access ends automatically.</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select aria-label="Absent teacher" className={sel} value={f.absent} onChange={(e) => setF({ ...f, absent: e.target.value })}><option value="">Teacher on leave…</option>{(t.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.full_name || p.email}</option>)}</select>
+        <select aria-label="Relief teacher" className={sel} value={f.relief} onChange={(e) => setF({ ...f, relief: e.target.value })}><option value="">Relief teacher…</option>{(t.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.full_name || p.email}</option>)}</select>
+        <Input type="date" aria-label="From" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} />
+        <Input type="date" aria-label="To" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} />
+        <select aria-label="Reason" className={sel + " sm:col-span-2"} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })}>{["Sick leave", "Family responsibility", "Training / workshop", "Maternity leave", "Other"].map((r) => <option key={r}>{r}</option>)}</select>
+      </div>
+      <Button size="sm" className="mt-2" onClick={save}>Grant cover</Button>
+      <ul className="mt-3 divide-y text-sm">
+        {(list.data ?? []).length === 0 ? <Empty>No current relief cover.</Empty> : (list.data ?? []).map((r) => (
+          <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+            <span>{name(r.relief_teacher_id)} covers {name(r.absent_teacher_id)} · {r.starts_on} → {r.ends_on}</span>
+            <Button size="sm" variant="outline" onClick={() => revoke(r.id)}>End now</Button>
+          </li>))}
+      </ul>
+    </Card>
+  );
+}
