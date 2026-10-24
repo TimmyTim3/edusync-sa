@@ -529,7 +529,7 @@ export function SubjectAllocation({ schoolId }: { schoolId: string }) {
       </div>
       <Button size="sm" className="mt-2" onClick={add}>Add allocation</Button>
       {f.teacher && <ul className="mt-3 max-h-56 divide-y overflow-y-auto text-sm">
-        {(rows.data ?? []).length === 0 ? <Empty>No subjects allocated yet.</Empty> : (rows.data ?? []).map((r) => {
+        {(rows.data ?? []).length === 0 ? <Empty text="No subjects allocated yet." /> : (rows.data ?? []).map((r) => {
           const x = r as unknown as { id: string; classes: { name: string } | null; subjects: { name: string } | null };
           return <li key={x.id} className="flex items-center justify-between py-1"><span>{x.subjects?.name} — {x.classes?.name}</span><Button size="sm" variant="ghost" onClick={() => remove(x.id)}>Remove</Button></li>;
         })}
@@ -570,7 +570,7 @@ export function ReliefManager({ schoolId }: { schoolId: string }) {
       </div>
       <Button size="sm" className="mt-2" onClick={save}>Grant cover</Button>
       <ul className="mt-3 divide-y text-sm">
-        {(list.data ?? []).length === 0 ? <Empty>No current relief cover.</Empty> : (list.data ?? []).map((r) => (
+        {(list.data ?? []).length === 0 ? <Empty text="No current relief cover." /> : (list.data ?? []).map((r) => (
           <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
             <span>{name(r.relief_teacher_id)} covers {name(r.absent_teacher_id)} · {r.starts_on} → {r.ends_on}</span>
             <Button size="sm" variant="outline" onClick={() => revoke(r.id)}>End now</Button>
