@@ -1014,6 +1014,53 @@ export type Database = {
           },
         ]
       }
+      relief_assignments: {
+        Row: {
+          absent_teacher_id: string
+          created_at: string
+          created_by: string | null
+          ends_on: string
+          id: string
+          reason: string | null
+          relief_teacher_id: string
+          revoked_at: string | null
+          school_id: string
+          starts_on: string
+        }
+        Insert: {
+          absent_teacher_id: string
+          created_at?: string
+          created_by?: string | null
+          ends_on: string
+          id?: string
+          reason?: string | null
+          relief_teacher_id: string
+          revoked_at?: string | null
+          school_id: string
+          starts_on: string
+        }
+        Update: {
+          absent_teacher_id?: string
+          created_at?: string
+          created_by?: string | null
+          ends_on?: string
+          id?: string
+          reason?: string | null
+          relief_teacher_id?: string
+          revoked_at?: string | null
+          school_id?: string
+          starts_on?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "relief_assignments_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       schools: {
         Row: {
           address: string | null
@@ -1459,6 +1506,10 @@ export type Database = {
           _school: string
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_active_relief_for: {
+        Args: { _school: string; _teacher: string }
         Returns: boolean
       }
       is_platform_admin: { Args: never; Returns: boolean }
