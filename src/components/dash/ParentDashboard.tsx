@@ -9,8 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { AttendanceCalendar } from "./AttendanceCalendar";
 import { ChildSchedule } from "./Timetable";
+import { ClaimChild, ReportAbsence } from "./BundleB";
 
-type Child = { id: string; first_name: string; last_name: string; admission_no: string; photo_url: string | null; class_id: string | null; classes: { name: string } | null };
+type Child = { id: string; first_name: string; last_name: string; admission_no: string; photo_url: string | null; class_id: string | null; classes: { name: string; grade: string } | null };
 
 const statusColor: Record<string, string> = {
   present: "bg-primary/15 text-primary",
@@ -38,7 +39,7 @@ export function ParentDashboard() {
       if (!sids.length) return [] as Child[];
       const { data } = await supabase
         .from("students")
-        .select("id, first_name, last_name, admission_no, photo_url, class_id, classes(name)")
+        .select("id, first_name, last_name, admission_no, photo_url, class_id, classes(name, grade)")
         .in("id", sids)
         .order("first_name");
       return (data ?? []) as unknown as Child[];
@@ -59,7 +60,13 @@ export function ParentDashboard() {
         child!.class_id
           ? supabase.from("homework").select("id, title, due_date, subjects(name)").eq("class_id", child!.class_id).order("due_date").limit(40)
           : Promise.resolve({ data: [] }),
-        supabase.from("notices").select("id, title, body, priority, published_at").order("published_at", { ascending: false }).limit(6),
+        supabase.from("notices").select("id, title, body, priority, published_at")
+          .or([
+            "scope.eq.school",
+            child!.classes?.grade ? `and(scope.eq.grade,grade.eq."${child!.classes.grade.replace(/"/g, "")}")` : null,
+            child!.class_id ? `and(scope.eq.class,class_id.eq.${child!.class_id})` : null,
+          ].filter(Boolean).join(","))
+          .order("published_at", { ascending: false }).limit(6),
       ]);
       return { att: att.data ?? [], marks: marks.data ?? [], beh: beh.data ?? [], hw: (hw.data ?? []) as { id: string; title: string; due_date: string; subjects: { name: string } | null }[], notices: notices.data ?? [] };
     },
@@ -73,7 +80,7 @@ export function ParentDashboard() {
 
   if (children.isLoading) return <Shell title="Family dashboard" lastUpdate={null}><Skeleton className="h-40 w-full" /></Shell>;
   if (!kids.length)
-    return <Shell title="Family dashboard" lastUpdate={lastUpdate}><Card><Empty text="No children are linked to your account yet. Ask your school to link you." /></Card></Shell>;
+    return <Shell title="Family dashboard" lastUpdate={lastUpdate}><div className="space-y-4"><Card><Empty text="No children are linked to your account yet. Link your child below with their school details, or ask the school office." /></Card>{user && <ClaimChild userId={user.id} />}</div></Shell>;
 
   const d = detail.data;
 
@@ -106,6 +113,10 @@ export function ParentDashboard() {
             </Button>
           );
         })}
+      </div>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {child && on("attendance") && <ReportAbsence key={child.id} studentId={child.id} name={child.first_name} />}
+        {user && <ClaimChild userId={user.id} />}
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {on("attendance") && <Stat label="Today" value={todayRec ? todayRec.status.replace("_", " ") : "Not marked"} />}
