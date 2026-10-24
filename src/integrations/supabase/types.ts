@@ -553,6 +553,63 @@ export type Database = {
           },
         ]
       }
+      learner_transfers: {
+        Row: {
+          clearance: Json
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          destination_school: string | null
+          id: string
+          leave_date: string
+          reason: string
+          school_id: string
+          status: string
+          student_id: string
+        }
+        Insert: {
+          clearance?: Json
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination_school?: string | null
+          id?: string
+          leave_date?: string
+          reason?: string
+          school_id: string
+          status?: string
+          student_id: string
+        }
+        Update: {
+          clearance?: Json
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination_school?: string | null
+          id?: string
+          leave_date?: string
+          reason?: string
+          school_id?: string
+          status?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learner_transfers_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learner_transfers_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marks: {
         Row: {
           assessment_id: string

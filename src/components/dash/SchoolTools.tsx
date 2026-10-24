@@ -579,3 +579,84 @@ export function ReliefManager({ schoolId }: { schoolId: string }) {
     </Card>
   );
 }
+
+const CLEAR_ITEMS = ["Textbooks returned", "Library books returned", "School fees settled", "Sports / music kit returned", "Report card & SA-SAMS record issued"] as const;
+type Transfer = { id: string; student_id: string; destination_school: string | null; reason: string; leave_date: string; clearance: Record<string, boolean>; status: string; students?: { first_name: string; last_name: string; admission_no: string; date_of_birth: string | null; classes?: { name: string } | null } | null };
+const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+/** Principal: learner transfer, clearance checklist, official letter and archiving. */
+export function TransferClearance({ schoolId }: { schoolId: string }) {
+  const qc = useQueryClient();
+  const [pick, setPick] = useState<Learner | null>(null);
+  const [f, setF] = useState({ dest: "", reason: "Relocation", date: new Date().toISOString().slice(0, 10) });
+  const school = useQuery({ queryKey: ["school-name", schoolId], queryFn: async () => (await supabase.from("schools").select("name, address, phone").eq("id", schoolId).single()).data });
+  const list = useQuery({
+    queryKey: ["transfers", schoolId],
+    queryFn: async () => ((await supabase.from("learner_transfers").select("*, students(first_name, last_name, admission_no, date_of_birth, classes(name))").eq("school_id", schoolId).order("created_at", { ascending: false }).limit(50)).data ?? []) as unknown as Transfer[],
+  });
+  const refresh = () => qc.invalidateQueries({ queryKey: ["transfers"] });
+  const start = async () => {
+    if (!pick) return;
+    const { error } = await supabase.from("learner_transfers").insert({ school_id: schoolId, student_id: pick.id, destination_school: f.dest || null, reason: f.reason, leave_date: f.date });
+    if (error) { toast.error(error.message); return; }
+    toast.success("Transfer started"); setPick(null); setF({ ...f, dest: "" }); void refresh();
+  };
+  const tick = async (t: Transfer, item: string) => {
+    const { error } = await supabase.from("learner_transfers").update({ clearance: { ...t.clearance, [item]: !t.clearance[item] } }).eq("id", t.id);
+    if (error) toast.error(error.message); else void refresh();
+  };
+  const complete = async (t: Transfer) => {
+    if (!CLEAR_ITEMS.every((i) => t.clearance[i]) && !confirm("Not every clearance item is ticked. Complete the transfer anyway?")) return;
+    const { error } = await supabase.from("learner_transfers").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", t.id);
+    if (error) { toast.error(error.message); return; }
+    const { error: e2 } = await supabase.from("students").update({ deleted_at: new Date().toISOString() }).eq("id", t.student_id);
+    if (e2) { toast.error(e2.message); return; }
+    toast.success("Learner archived — all records kept"); void refresh(); void qc.invalidateQueries({ queryKey: ["learner-search"] });
+  };
+  const cancel = async (t: Transfer) => {
+    const { error } = await supabase.from("learner_transfers").update({ status: "cancelled" }).eq("id", t.id);
+    if (error) toast.error(error.message); else void refresh();
+  };
+  const letter = (t: Transfer) => {
+    const s = t.students; const sc = school.data;
+    const w = window.open("", "_blank"); if (!w) { toast.error("Allow pop-ups to print the letter"); return; }
+    w.document.write(`<html><head><title>Transfer letter</title><style>body{font-family:Georgia,serif;max-width:700px;margin:40px auto;line-height:1.6}h1{font-size:20px;text-align:center}td{padding:4px 8px}table{border-collapse:collapse}td:first-child{font-weight:bold}.sig{margin-top:60px;display:flex;justify-content:space-between}</style></head><body>
+<h1>${esc(sc?.name)}<br/><small>${esc(sc?.address)} ${esc(sc?.phone)}</small></h1><h2 style="text-align:center;font-size:16px">LEARNER TRANSFER CERTIFICATE</h2>
+<p>This certifies that the learner below was enrolled at this school and is transferring with effect from <b>${esc(t.leave_date)}</b>.</p>
+<table><tr><td>Learner</td><td>${esc(s?.first_name)} ${esc(s?.last_name)}</td></tr><tr><td>Admission no.</td><td>${esc(s?.admission_no)}</td></tr><tr><td>Date of birth</td><td>${esc(s?.date_of_birth)}</td></tr><tr><td>Last class</td><td>${esc(s?.classes?.name)}</td></tr><tr><td>Destination school</td><td>${esc(t.destination_school || "Not stated")}</td></tr><tr><td>Reason</td><td>${esc(t.reason)}</td></tr></table>
+<h3 style="font-size:15px">Clearance</h3><ul>${CLEAR_ITEMS.map((i) => `<li>${t.clearance[i] ? "&#10003;" : "&#10007;"} ${esc(i)}</li>`).join("")}</ul>
+<div class="sig"><div>______________________<br/>Principal</div><div>______________________<br/>Date &amp; school stamp</div></div></body></html>`);
+    w.document.close(); w.focus(); w.print();
+  };
+  const sel = "h-9 w-full rounded-md border bg-background px-2 text-sm";
+  return (
+    <Card title="Transfers & clearance">
+      {!pick ? <LearnerSearch schoolId={schoolId} onPick={setPick} /> : (
+        <div className="space-y-2">
+          <p className="text-sm">Transferring <b>{pick.first_name} {pick.last_name}</b> ({pick.admission_no}) <Button size="sm" variant="ghost" onClick={() => setPick(null)}>Change</Button></p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Input placeholder="Destination school" value={f.dest} onChange={(e) => setF({ ...f, dest: e.target.value })} />
+            <select aria-label="Reason" className={sel} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })}>{["Relocation", "Parent's choice", "Financial reasons", "Disciplinary (SASA)", "Emigration", "Other"].map((r) => <option key={r}>{r}</option>)}</select>
+            <Input type="date" aria-label="Leaving date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
+          </div>
+          <Button size="sm" onClick={start}>Start transfer</Button>
+        </div>)}
+      <ul className="mt-4 max-h-[480px] space-y-3 overflow-y-auto text-sm">
+        {(list.data ?? []).length === 0 ? <Empty text="No transfers yet." /> : (list.data ?? []).map((t) => (
+          <li key={t.id} className="rounded-md border p-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <b>{t.students?.first_name} {t.students?.last_name} <span className="font-normal text-muted-foreground">· {t.students?.admission_no} → {t.destination_school || "—"}</span></b>
+              <span className="rounded bg-muted px-2 text-xs capitalize">{t.status}</span>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              {CLEAR_ITEMS.map((i) => <label key={i} className="flex items-center gap-1 text-xs"><input type="checkbox" disabled={t.status !== "pending"} checked={!!t.clearance[i]} onChange={() => tick(t, i)} />{i}</label>)}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => letter(t)}>Print transfer letter</Button>
+              {t.status === "pending" && <><Button size="sm" onClick={() => complete(t)}>Complete & archive</Button><Button size="sm" variant="ghost" onClick={() => cancel(t)}>Cancel</Button></>}
+            </div>
+          </li>))}
+      </ul>
+    </Card>
+  );
+}

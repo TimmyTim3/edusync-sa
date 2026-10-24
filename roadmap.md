@@ -7,5 +7,5 @@
 - [x] Add four persistent accessible themes and replace public pricing with Tim Web Development & Automation Agency branding.
 - [x] Welcome-screen child linking with relationship + two-way parent auto-link.
 - [x] Bundle C: multi-subject allocation + relief teacher cover.
-- [ ] Bundle C: transfer & clearance cards.
+- [x] Bundle C: transfer & clearance cards.
 - [ ] Verify previews and role flows; correct outstanding issues.
