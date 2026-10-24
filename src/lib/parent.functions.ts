@@ -5,9 +5,11 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const phoneKey = (p: string) => p.replace(/\D/g, "").replace(/^0/, "27");
 
 /** Parent self-service: link an additional child with admission number + surname + birth date as proof. */
+const RELS = ["Mother", "Father", "Guardian", "Grandmother", "Grandfather", "Aunt", "Uncle", "Sibling", "Foster parent", "Other"];
 export const claimMyChild = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { admissionNo: string; surname: string; dob: string }) => ({
+  .inputValidator((input: { admissionNo: string; surname: string; dob: string; relationship?: string }) => ({
+    relationship: RELS.includes(String(input?.relationship)) ? String(input.relationship) : "Guardian",
     admissionNo: String(input?.admissionNo ?? "").trim().slice(0, 40),
     surname: String(input?.surname ?? "").trim().slice(0, 80),
     dob: DATE.test(input?.dob ?? "") ? input.dob : "",
@@ -50,7 +52,7 @@ export const claimMyChild = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
     const { error: linkErr } = await admin.from("parent_student")
-      .upsert({ school_id: student.school_id, parent_id: parentId!, student_id: student.id, relationship: "Guardian", is_primary: false }, { onConflict: "parent_id,student_id", ignoreDuplicates: true });
+      .upsert({ school_id: student.school_id, parent_id: parentId!, student_id: student.id, relationship: data.relationship, is_primary: false }, { onConflict: "parent_id,student_id", ignoreDuplicates: true });
     if (linkErr) throw new Error(linkErr.message);
     await admin.from("audit_logs").insert({ actor_id: context.userId, actor_email: email, school_id: student.school_id, action: "parent_self_claim", details: { student_id: student.id } });
     return { ok: true, studentName: `${student.first_name} ${student.last_name}` };

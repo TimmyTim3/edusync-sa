@@ -15,19 +15,22 @@ const sel = "h-9 w-full rounded-md border bg-background px-2 text-sm";
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong");
 
 /* ---------------- Parent: link another child ---------------- */
-export function ClaimChild({ userId }: { userId: string }) {
+const RELATIONSHIPS = ["Mother", "Father", "Guardian", "Grandmother", "Grandfather", "Aunt", "Uncle", "Sibling", "Foster parent", "Other"];
+export function ClaimChild({ userId, startOpen = false, onLinked }: { userId: string; startOpen?: boolean; onLinked?: () => void | Promise<void> }) {
   const qc = useQueryClient();
   const claim = useServerFn(claimMyChild);
-  const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ admissionNo: "", surname: "", dob: "" });
+  const [open, setOpen] = useState(startOpen);
+  const [f, setF] = useState({ admissionNo: "", surname: "", dob: "", relationship: "" });
   const [busy, setBusy] = useState(false);
   const submit = async () => {
+    if (!f.relationship) { toast.error("Choose your relationship to the child"); return; }
     setBusy(true);
     try {
       await claim({ data: f });
       toast.success("Child linked to your account");
-      setF({ admissionNo: "", surname: "", dob: "" });
-      setOpen(false);
+      setF({ admissionNo: "", surname: "", dob: "", relationship: "" });
+      setOpen(startOpen);
+      await onLinked?.();
       await qc.invalidateQueries({ queryKey: ["children", userId] });
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
   };
@@ -39,10 +42,14 @@ export function ClaimChild({ userId }: { userId: string }) {
         <Input placeholder="Admission number" value={f.admissionNo} onChange={(e) => setF({ ...f, admissionNo: e.target.value })} />
         <Input placeholder="Learner surname" value={f.surname} onChange={(e) => setF({ ...f, surname: e.target.value })} />
         <Input type="date" aria-label="Birth date" value={f.dob} onChange={(e) => setF({ ...f, dob: e.target.value })} />
+        <select aria-label="Your relationship to the child" className={sel + " sm:col-span-3"} value={f.relationship} onChange={(e) => setF({ ...f, relationship: e.target.value })}>
+          <option value="">I am the child's…</option>
+          {RELATIONSHIPS.map((r) => <option key={r}>{r}</option>)}
+        </select>
       </div>
       <div className="mt-2 flex gap-2">
         <Button size="sm" disabled={busy} onClick={submit}>{busy ? "Checking…" : "Link child"}</Button>
-        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+        {!startOpen && <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>}
       </div>
     </Card>
   );
