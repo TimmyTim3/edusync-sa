@@ -127,6 +127,13 @@
       "when": 1792857470607,
       "tag": "0017_parent_two_way_link_and_audit_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792857708637,
+      "tag": "0018_relief_assignments_and_settings_lockdown",
+      "breakpoints": true
     }
   ]
 }
