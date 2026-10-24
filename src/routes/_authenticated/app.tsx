@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ParentDashboard } from "@/components/dash/ParentDashboard";
 import { TeacherDashboard } from "@/components/dash/TeacherDashboard";
+import { ClaimChild } from "@/components/dash/BundleB";
 import { PrincipalDashboard } from "@/components/dash/PrincipalDashboard";
 
 export const Route = createFileRoute("/_authenticated/app")({
@@ -34,7 +35,7 @@ function RoleChip() {
 }
 
 function Dash() {
-  const { loading, primaryRole, isPlatformAdmin, user, signOut } = useAuth();
+  const { loading, primaryRole, isPlatformAdmin, user, signOut, refresh } = useAuth();
   if (loading) return <div className="p-8"><Skeleton className="h-48 w-full" /></div>;
   if (primaryRole === "school_admin") return isPlatformAdmin ? <><RemoteBanner /><PrincipalDashboard /></> : <PrincipalDashboard />;
   if (primaryRole === "teacher") return <TeacherDashboard />;
@@ -42,7 +43,8 @@ function Dash() {
   return (
     <div className="mx-auto max-w-xl p-8">
       <h1 className="font-display text-2xl font-semibold">Welcome</h1>
-      <p className="mt-2 text-muted-foreground">Signed in as {user?.email}. Your account isn't linked to a school yet.</p>
+      <p className="mt-2 text-muted-foreground">Signed in as {user?.email}. Are you a parent or guardian? Link your child below using the details on their school record.</p>
+      {user && <div className="mt-4"><ClaimChild userId={user.id} startOpen onLinked={refresh} /></div>}
       <div className="mt-6 flex gap-2">
         {isPlatformAdmin && <Button asChild><Link to="/master">Master Control Centre</Link></Button>}
         <Button variant="outline" onClick={() => void signOut()}>Sign out</Button>
