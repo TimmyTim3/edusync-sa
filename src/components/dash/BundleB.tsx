@@ -54,7 +54,7 @@ export function ReportAbsence({ studentId, name }: { studentId: string; name: st
   const qc = useQueryClient();
   const send = useServerFn(reportAbsence);
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ date: today(), reason: REASONS[0], detail: "" });
+  const [f, setF] = useState({ date: today(), reason: REASONS[0] ?? "Illness", detail: "" });
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     setBusy(true);
@@ -98,13 +98,13 @@ export function HomeworkEditor({ classId }: { classId: string }) {
   const save = async () => {
     if (!edit) return;
     const { error } = await supabase.from("homework").update({ title: edit.title, description: edit.description, due_date: edit.due_date }).eq("id", edit.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Homework updated"); setEdit(null); refresh();
   };
   const del = async (h: Hw) => {
     if (!confirm(`Delete "${h.title}" and its hand-in ticks?`)) return;
     const { error } = await supabase.from("homework").delete().eq("id", h.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Homework deleted"); refresh();
   };
   return (
@@ -157,7 +157,7 @@ export function MarkbookEditor({ schoolId, classId, subjectId, students }: { sch
     const rows = Object.entries(scores).filter(([, v]) => v !== "").map(([student_id, v]) => ({ school_id: schoolId, assessment_id: a.id, student_id, score: Math.max(0, Math.min(Number(v), a.max_marks)) }));
     const cleared = Object.entries(scores).filter(([, v]) => v === "").map(([k]) => k);
     const { error } = rows.length ? await supabase.from("marks").upsert(rows, { onConflict: "assessment_id,student_id" }) : { error: null };
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     if (cleared.length) await supabase.from("marks").delete().eq("assessment_id", a.id).in("student_id", cleared);
     toast.success(`Saved ${rows.length} marks`);
   };
@@ -165,7 +165,7 @@ export function MarkbookEditor({ schoolId, classId, subjectId, students }: { sch
     if (!a || !confirm(`Delete "${a.title}" and all its marks?`)) return;
     await supabase.from("marks").delete().eq("assessment_id", a.id);
     const { error } = await supabase.from("assessments").delete().eq("id", a.id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Assessment deleted"); setAid(""); qc.invalidateQueries({ queryKey: ["teacher-assessments", classId, subjectId] });
   };
   return (
