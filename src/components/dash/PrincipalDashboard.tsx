@@ -158,7 +158,7 @@ export function PrincipalDashboard() {
         {on("notices") && schoolId && <NoticesManager schoolId={schoolId} />}
         {schoolId && <NeedsCompletion schoolId={schoolId} />}
         {schoolId && <ParentLinker schoolId={schoolId} />}
-        {schoolId && <ClassTeacherAssign schoolId={schoolId} /><SubjectAllocation schoolId={schoolId} /><ReliefManager schoolId={schoolId} />}
+        {schoolId && <ClassTeacherAssign schoolId={schoolId} />}
       </div>
       </>
       )}
