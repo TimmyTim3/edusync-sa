@@ -9,6 +9,7 @@ import { Shell, Card, Stat, today } from "./Shell";
 import { DisciplinaryReports } from "./DisciplinaryReports";
 import { ClassGlance } from "./ClassGlance";
 import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NeedsCompletion, NoticesManager, ParentLinker, RolloverWizard, StaffIngest } from "./SchoolTools";
+import { PromotionPreview } from "./BundleB";
 import { TimetablePanel } from "./Timetable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,7 +100,7 @@ export function PrincipalDashboard() {
       {tab === "timetable" && schoolId ? (
         <TimetablePanel schoolId={schoolId} />
       ) : tab === "staff" && schoolId ? (
-        <div className="grid gap-4 lg:grid-cols-2"><StaffIngest schoolId={schoolId} /><ClassTeacherAssign schoolId={schoolId} /><RolloverWizard schoolId={schoolId} /></div>
+        <div className="grid gap-4 lg:grid-cols-2"><StaffIngest schoolId={schoolId} /><ClassTeacherAssign schoolId={schoolId} /><RolloverWizard schoolId={schoolId} /><PromotionPreview schoolId={schoolId} /></div>
       ) : tab === "discipline" ? (
         <DisciplinaryReports schoolId={schoolId} />
       ) : glance ? (
