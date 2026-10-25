@@ -10,6 +10,7 @@ import { DisciplinaryReports } from "./DisciplinaryReports";
 import { ClassGlance } from "./ClassGlance";
 import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NeedsCompletion, NoticesManager, ParentLinker, ReliefManager, RolloverWizard, StaffIngest, SubjectAllocation, TransferClearance } from "./SchoolTools";
 import { PromotionPreview } from "./BundleB";
+import { GateRegister, TruancyAlerts } from "./BundleD";
 import { TimetablePanel } from "./Timetable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +70,7 @@ export function PrincipalDashboard() {
     },
   });
 
-  const [tab, setTab] = useState<"overview" | "discipline" | "timetable" | "staff">("overview");
+  const [tab, setTab] = useState<"overview" | "discipline" | "timetable" | "staff" | "gate">("overview");
   const [drawer, setDrawer] = useState(false);
   const [glance, setGlance] = useState<{ id: string; name: string } | null>(null);
   const [n, setN] = useState({ title: "", body: "", urgent: false });
@@ -91,6 +92,7 @@ export function PrincipalDashboard() {
         <Button size="sm" variant={tab === "overview" ? "default" : "outline"} onClick={() => setTab("overview")}>Overview</Button>
         <Button size="sm" variant={tab === "timetable" ? "default" : "outline"} onClick={() => setTab("timetable")}>Exams & extra classes</Button>
         <Button size="sm" variant={tab === "staff" ? "default" : "outline"} onClick={() => setTab("staff")}>Staff & year-end</Button>
+        <Button size="sm" variant={tab === "gate" ? "default" : "outline"} onClick={() => setTab("gate")}>Gate & truancy</Button>
         {on("behaviour") && (
           <Button size="sm" variant={tab === "discipline" ? "default" : "outline"} onClick={() => setTab("discipline")}>
             Disciplinary reports
@@ -99,6 +101,8 @@ export function PrincipalDashboard() {
       </div>
       {tab === "timetable" && schoolId ? (
         <TimetablePanel schoolId={schoolId} />
+      ) : tab === "gate" && schoolId ? (
+        <div className="grid gap-4 lg:grid-cols-2"><GateRegister schoolId={schoolId} /><TruancyAlerts schoolId={schoolId} /></div>
       ) : tab === "staff" && schoolId ? (
         <div className="grid gap-4 lg:grid-cols-2"><StaffIngest schoolId={schoolId} /><ClassTeacherAssign schoolId={schoolId} /><SubjectAllocation schoolId={schoolId} /><ReliefManager schoolId={schoolId} /><RolloverWizard schoolId={schoolId} /><PromotionPreview schoolId={schoolId} /><TransferClearance schoolId={schoolId} /></div>
       ) : tab === "discipline" ? (

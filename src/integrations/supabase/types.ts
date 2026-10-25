@@ -440,6 +440,60 @@ export type Database = {
         }
         Relationships: []
       }
+      gate_logs: {
+        Row: {
+          collected_by: string | null
+          collector_id_checked: boolean
+          collector_relationship: string | null
+          id: string
+          kind: string
+          logged_at: string
+          logged_by: string | null
+          reason: string
+          school_id: string
+          student_id: string
+        }
+        Insert: {
+          collected_by?: string | null
+          collector_id_checked?: boolean
+          collector_relationship?: string | null
+          id?: string
+          kind: string
+          logged_at?: string
+          logged_by?: string | null
+          reason: string
+          school_id: string
+          student_id: string
+        }
+        Update: {
+          collected_by?: string | null
+          collector_id_checked?: boolean
+          collector_relationship?: string | null
+          id?: string
+          kind?: string
+          logged_at?: string
+          logged_by?: string | null
+          reason?: string
+          school_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gate_logs_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gate_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       homework: {
         Row: {
           attachment_url: string | null
