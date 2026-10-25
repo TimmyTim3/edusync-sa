@@ -1,5 +1,6 @@
 # Current work
-- [ ] Fix full demo seeding timeout and verify 3,220 learners with usable accounts.
+- [x] Bundle F: demo school verified at 3,220 learners / 1,701 parents / 118 teachers; Principal dashboard checked on phone + desktop (no errors, no sideways scroll).
+- [ ] Bundle F follow-up: Principal overview figures take ~6–15s to load; speed up. Phone check of Teacher/Parent views still pending.
 - [x] Bundle 1: learner + parent linking import, past attendance and behaviour importers.
 - [ ] Add disciplinary analytics, filters, archive and PDF/CSV exports, plus teacher behaviour notebook.
 - [ ] Restrict attendance writes to class teacher; allow audited principal overrides, class assignment and dated history.
