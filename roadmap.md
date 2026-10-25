@@ -11,3 +11,4 @@
 - [x] Bundle C: transfer & clearance cards.
 - [ ] Verify previews and role flows; correct outstanding issues.
 - [x] Bundle D: show-password toggle, collapsible behaviour notes, gate register (late/early sign-out with ID check), truancy alerts.
+- [x] Bundle E: Front Office / clerk portal (lookup + guardian contacts, absence calls, gate register, parent linking); clerks added via staff upload with role 'Clerk'/'Receptionist'.

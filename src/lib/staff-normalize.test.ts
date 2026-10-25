@@ -13,5 +13,6 @@ describe("normalizeSaPhone", () => {
 describe("mapStaffRole", () => {
   it("HOD becomes teacher", () => expect(mapStaffRole("HOD")).toBe("teacher"));
   it("Deputy principal becomes school admin", () => expect(mapStaffRole("Deputy Principal")).toBe("school_admin"));
-  it("Admin clerk is not supported yet", () => expect(mapStaffRole("Admin Clerk")).toBeNull());
+  it("Admin clerk becomes front office", () => expect(mapStaffRole("Admin Clerk")).toBe("clerk"));
+  it("Receptionist becomes front office", () => expect(mapStaffRole("Receptionist")).toBe("clerk"));
 });
