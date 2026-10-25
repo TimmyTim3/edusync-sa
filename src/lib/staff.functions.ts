@@ -24,7 +24,7 @@ export const bulkIngestStaff = createServerFn({ method: "POST" })
       const name = String(r.full_name ?? "").trim().slice(0, 120);
       const role = mapStaffRole(r.role);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !name) { out.push({ email, ok: false, message: "Missing name or valid email" }); continue; }
-      if (!role) { out.push({ email, ok: false, message: `Role "${r.role}" not supported yet (front office view comes later)` }); continue; }
+      if (!role) { out.push({ email, ok: false, message: `Role "${r.role}" not supported yet` }); continue; }
       const phone = normalizeSaPhone(r.phone ?? "");
       let uid: string | null = null;
       const { data: existing } = await supabaseAdmin.from("profiles").select("id").eq("email", email).maybeSingle();
