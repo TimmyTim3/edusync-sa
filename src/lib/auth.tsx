@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const PLATFORM_ADMIN_EMAIL = "timmytim691@gmail.com";
 
-export type AppRole = "school_admin" | "teacher" | "parent" | "student";
+export type AppRole = "school_admin" | "teacher" | "clerk" | "parent" | "student";
 
 export type RoleRow = { role: AppRole; school_id: string | null };
 
@@ -24,7 +24,7 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-const ROLE_PRIORITY: AppRole[] = ["school_admin", "teacher", "parent", "student"];
+const ROLE_PRIORITY: AppRole[] = ["school_admin", "teacher", "clerk", "parent", "student"];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);

@@ -148,6 +148,13 @@
       "when": 1792966743551,
       "tag": "0020_bundle_d_gate_register",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792969843831,
+      "tag": "0021_bundle_e_front_office",
+      "breakpoints": true
     }
   ]
 }

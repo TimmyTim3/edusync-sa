@@ -8,6 +8,7 @@ import { ParentDashboard } from "@/components/dash/ParentDashboard";
 import { TeacherDashboard } from "@/components/dash/TeacherDashboard";
 import { ClaimChild } from "@/components/dash/BundleB";
 import { PrincipalDashboard } from "@/components/dash/PrincipalDashboard";
+import { FrontOfficeDashboard } from "@/components/dash/FrontOffice";
 
 export const Route = createFileRoute("/_authenticated/app")({
   head: () => ({ meta: [{ title: "Dashboard — EduSync" }, { name: "robots", content: "noindex" }] }),
@@ -20,7 +21,7 @@ function AppHome() {
   return <><RoleChip /><Dash /></>;
 }
 
-const roleLabel: Record<string, string> = { school_admin: "Principal", teacher: "Teacher", parent: "Parent", student: "Learner" };
+const roleLabel: Record<string, string> = { school_admin: "Principal", teacher: "Teacher", clerk: "Front office", parent: "Parent", student: "Learner" };
 function RoleChip() {
   const { availableRoles, primaryRole, setViewAs } = useAuth();
   if (availableRoles.length < 2) return null;
@@ -39,6 +40,7 @@ function Dash() {
   if (loading) return <div className="p-8"><Skeleton className="h-48 w-full" /></div>;
   if (primaryRole === "school_admin") return isPlatformAdmin ? <><RemoteBanner /><PrincipalDashboard /></> : <PrincipalDashboard />;
   if (primaryRole === "teacher") return <TeacherDashboard />;
+  if (primaryRole === "clerk") return <FrontOfficeDashboard />;
   if (primaryRole === "parent") return <ParentDashboard />;
   return (
     <div className="mx-auto max-w-xl p-8">

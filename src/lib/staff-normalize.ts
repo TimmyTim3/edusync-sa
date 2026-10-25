@@ -9,8 +9,9 @@ export function normalizeSaPhone(raw: string): string {
 }
 
 /** Map a staff role from a spreadsheet to an app role; null = not supported yet. */
-export function mapStaffRole(raw: string | undefined): "teacher" | "school_admin" | null {
+export function mapStaffRole(raw: string | undefined): "teacher" | "school_admin" | "clerk" | null {
   const r = String(raw ?? "teacher").trim().toLowerCase();
+  if (/clerk|reception|front office|admin assistant|secretary/.test(r)) return "clerk";
   if (!r || /teacher|educator|hod|head of dep|subject/.test(r)) return "teacher";
   if (/principal|deputy|admin/.test(r) && !/clerk/.test(r)) return "school_admin";
   return null;

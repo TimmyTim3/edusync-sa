@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      absence_reports: {
+        Row: {
+          absence_date: string
+          channel: string
+          created_at: string
+          id: string
+          logged_by: string | null
+          reason: string
+          reported_by: string | null
+          school_id: string
+          student_id: string
+        }
+        Insert: {
+          absence_date?: string
+          channel?: string
+          created_at?: string
+          id?: string
+          logged_by?: string | null
+          reason: string
+          reported_by?: string | null
+          school_id: string
+          student_id: string
+        }
+        Update: {
+          absence_date?: string
+          channel?: string
+          created_at?: string
+          id?: string
+          logged_by?: string | null
+          reason?: string
+          reported_by?: string | null
+          school_id?: string
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "absence_reports_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "absence_reports_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       academic_years: {
         Row: {
           end_date: string
@@ -1623,6 +1674,7 @@ export type Database = {
         Args: { _school: string; _teacher: string }
         Returns: boolean
       }
+      is_front_office: { Args: { _school: string }; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
       is_school_admin: { Args: { _school: string }; Returns: boolean }
       is_school_member: { Args: { _school: string }; Returns: boolean }
@@ -1647,7 +1699,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "school_admin" | "teacher" | "parent" | "student"
+      app_role: "school_admin" | "teacher" | "parent" | "student" | "clerk"
       attendance_status: "present" | "absent" | "late" | "excused" | "half_day"
       notice_scope: "school" | "grade" | "class"
       school_status: "active" | "suspended" | "trial"
@@ -1778,7 +1830,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["school_admin", "teacher", "parent", "student"],
+      app_role: ["school_admin", "teacher", "parent", "student", "clerk"],
       attendance_status: ["present", "absent", "late", "excused", "half_day"],
       notice_scope: ["school", "grade", "class"],
       school_status: ["active", "suspended", "trial"],
