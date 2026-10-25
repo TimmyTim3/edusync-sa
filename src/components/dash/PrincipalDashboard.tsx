@@ -29,32 +29,40 @@ export function PrincipalDashboard() {
       const c = (q: PromiseLike<{ count: number | null }>) => Promise.resolve(q).then((r) => r.count ?? 0);
       const sid = schoolId;
       if (!sid) throw new Error("No school selected");
-      // most recent full school day: skip days where only a few classes were marked
-      const roll = await c(supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", sid).is("deleted_at", null));
-      let day = today();
-      let before: string | null = null;
-      for (let i = 0; i < 10; i++) {
-        let lq = supabase.from("attendance_records").select("date").eq("school_id", sid).order("date", { ascending: false }).limit(1);
-        if (before) lq = lq.lt("date", before);
-        const { data: last } = await lq;
-        const d0 = last?.[0]?.date;
-        if (!d0) break;
-        if (i === 0) day = d0;
-        const n0 = await c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", d0));
-        if (n0 >= roll * 0.5) { day = d0; break; }
-        before = d0;
-      }
-      const [school, students, parents, teachers, marked, present, positive, negative] = await Promise.all([
+      // Independent figures load in parallel with the "which day" lookup.
+      const basicsP = Promise.all([
         supabase.from("schools").select("name").eq("id", sid).single(),
         c(supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", sid)),
         c(supabase.from("parents").select("id", { count: "exact", head: true }).eq("school_id", sid)),
         c(supabase.from("user_roles").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("role", "teacher")),
-        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day)),
-        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day).in("status", ["present", "late"])),
         c(supabase.from("behaviour_notes").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("is_positive", true)),
         c(supabase.from("behaviour_notes").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("is_positive", false)),
+        supabase.from("classes").select("id, name, grade").eq("school_id", sid).order("grade").order("name"),
+        supabase.from("notices").select("id, title, scope, published_at").eq("school_id", sid).order("published_at", { ascending: false }).limit(8),
       ]);
-      const { data: classes } = await supabase.from("classes").select("id, name, grade").eq("school_id", sid).order("grade").order("name");
+      // most recent full school day: skip days where only a few classes were marked
+      const [roll, lastRes] = await Promise.all([
+        c(supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", sid).is("deleted_at", null)),
+        supabase.from("attendance_records").select("date").eq("school_id", sid).order("date", { ascending: false }).limit(1),
+      ]);
+      let day = today();
+      const d0 = lastRes.data?.[0]?.date as string | undefined;
+      if (d0) {
+        day = d0;
+        const base = new Date(d0 + "T00:00:00Z");
+        const candidates = Array.from({ length: 14 }, (_, i) => new Date(base.getTime() - i * 86400000).toISOString().slice(0, 10));
+        const counts = await Promise.all(candidates.map((d) => c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", d))));
+        const idx = counts.findIndex((n) => n >= roll * 0.5);
+        if (idx >= 0) day = candidates[idx];
+      }
+      const [[school, students, parents, teachers, positive, negative, classesRes, noticesRes], marked, present, late] = await Promise.all([
+        basicsP,
+        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day)),
+        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day).in("status", ["present", "late"])),
+        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day).eq("status", "late")),
+      ]);
+      const classes = classesRes.data;
+      const notices = noticesRes.data;
       const notPresent: unknown[] = [];
       for (let from = 0; from < 5000; from += 1000) {
         const { data: page } = await supabase
