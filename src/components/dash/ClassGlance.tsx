@@ -170,9 +170,11 @@ export function StudentRecord({ student, onClose }: { student: { id: string; fir
           <Button size="icon" variant="ghost" aria-label="Close" onClick={onClose}><X className="h-4 w-4" /></Button></div>
         <ChangeClass studentId={student.id} />
         <AttendanceCalendar records={q.data?.att ?? []} />
-        <h4 className="mt-5 mb-2 font-semibold">Behaviour notes ({q.data?.beh.length ?? 0})</h4>
-        <ul className="divide-y text-sm">{(q.data?.beh ?? []).map((b) => <li key={b.id} className="py-2"><div className="flex justify-between"><span className="font-medium">{b.category}</span><span className={b.is_positive ? "text-success" : "text-destructive"}>{b.is_positive ? "+" : "−"}{Math.abs(b.points)}</span></div><p className="text-muted-foreground">{b.note}</p><p className="text-xs text-muted-foreground">{new Date(b.created_at).toLocaleDateString()}</p></li>)}</ul>
-      </div>
+        {(() => { const b = q.data?.beh ?? []; const pos = b.filter((x) => x.is_positive).length; return (
+        <details className="mt-5 rounded-lg border">
+          <summary className="flex cursor-pointer items-center justify-between gap-2 p-3 font-semibold"><span>Behaviour notes ({b.length})</span><span className="text-xs font-normal"><span className="text-success">+{pos} merits</span> · <span className="text-destructive">−{b.length - pos} concerns</span> · tap to open</span></summary>
+          <ul className="max-h-80 divide-y overflow-y-auto border-t px-3 text-sm">{b.length === 0 && <li className="py-2 text-muted-foreground">No behaviour notes.</li>}{b.map((n) => <li key={n.id} className="py-2"><div className="flex justify-between"><span className="font-medium">{n.category}</span><span className={n.is_positive ? "text-success" : "text-destructive"}>{n.is_positive ? "+" : "−"}{Math.abs(n.points)}</span></div><p className="text-muted-foreground">{n.note}</p><p className="text-xs text-muted-foreground">{new Date(n.created_at).toLocaleDateString()}</p></li>)}</ul>
+        </details>); })()}      </div>
     </div>
   );
 }

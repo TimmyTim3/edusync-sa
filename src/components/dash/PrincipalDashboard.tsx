@@ -70,7 +70,7 @@ export function PrincipalDashboard() {
     },
   });
 
-  const [tab, setTab] = useState<"overview" | "discipline" | "timetable" | "staff">("overview");
+  const [tab, setTab] = useState<"overview" | "discipline" | "timetable" | "staff" | "gate">("overview");
   const [drawer, setDrawer] = useState(false);
   const [glance, setGlance] = useState<{ id: string; name: string } | null>(null);
   const [n, setN] = useState({ title: "", body: "", urgent: false });
