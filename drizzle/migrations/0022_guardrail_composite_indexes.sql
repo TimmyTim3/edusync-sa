@@ -1,0 +1,15 @@
+CREATE INDEX IF NOT EXISTS idx_att_school_date_status ON public.attendance_records (school_id, date DESC, status);
+CREATE INDEX IF NOT EXISTS idx_beh_school_polarity ON public.behaviour_notes (school_id, is_positive, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_beh_student_created ON public.behaviour_notes (student_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_marks_assessment_student ON public.marks (assessment_id, student_id);
+CREATE INDEX IF NOT EXISTS idx_marks_student ON public.marks (student_id);
+CREATE INDEX IF NOT EXISTS idx_students_active_roll ON public.students (school_id, class_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_homework_school_class_due ON public.homework (school_id, class_id, due_date DESC);
+CREATE INDEX IF NOT EXISTS idx_hwc_homework_student ON public.homework_completions (homework_id, student_id);
+CREATE INDEX IF NOT EXISTS idx_assessments_class_date ON public.assessments (school_id, class_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_parent_student_student ON public.parent_student (student_id);
+CREATE INDEX IF NOT EXISTS idx_parents_user ON public.parents (user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_notices_school_published ON public.notices (school_id, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_roles_user_school ON public.user_roles (user_id, school_id);
+CREATE INDEX IF NOT EXISTS idx_session_att_session ON public.session_attendance (session_id, student_id);
+CREATE INDEX IF NOT EXISTS idx_audit_school_created ON public.audit_logs (school_id, created_at DESC);
