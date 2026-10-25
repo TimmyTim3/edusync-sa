@@ -72,8 +72,6 @@ export function PrincipalDashboard() {
         if (!page || page.length < 1000) break;
       }
       const absent = notPresent as { status: string; students: { first_name: string; last_name: string } | null; classes: { name: string } | null }[];
-      const late = await c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day).eq("status", "late"));
-      const { data: notices } = await supabase.from("notices").select("id, title, scope, published_at").eq("school_id", sid).order("published_at", { ascending: false }).limit(8);
       return { name: school.data?.name ?? "School", day, students, parents, teachers, marked, present, late, positive, negative, classes: classes ?? [], absent, notices: notices ?? [] };
     },
   });
