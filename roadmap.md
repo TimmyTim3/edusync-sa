@@ -9,3 +9,4 @@
 - [x] Bundle C: multi-subject allocation + relief teacher cover.
 - [x] Bundle C: transfer & clearance cards.
 - [ ] Verify previews and role flows; correct outstanding issues.
+- [x] Bundle D: show-password toggle, collapsible behaviour notes, gate register (late/early sign-out with ID check), truancy alerts.
