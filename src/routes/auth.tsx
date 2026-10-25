@@ -1,3 +1,4 @@
+import { PasswordInput } from "@/components/PasswordInput";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -106,7 +107,7 @@ function AuthPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                <PasswordInput id="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
               <Button className="w-full" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</Button>
               <div className="flex justify-between text-sm">
@@ -127,7 +128,7 @@ function AuthPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="su-password">Password</Label>
-                <Input id="su-password" type="password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
+                <PasswordInput id="su-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
               <Button className="w-full" disabled={busy}>Create account</Button>
               <p className="text-xs text-muted-foreground">

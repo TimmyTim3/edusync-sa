@@ -86,7 +86,7 @@ export function TruancyAlerts({ schoolId }: { schoolId: string }) {
     <Card title={`Truancy alerts — ${rows.length} learner${rows.length === 1 ? "" : "s"} (3+ unexcused absences, last 14 days)`}>
       {q.isLoading ? <p className="text-sm text-muted-foreground">Checking registers…</p> : rows.length === 0 ? <Empty text="No learners at risk right now." /> : (
         <ul className="max-h-80 divide-y overflow-y-auto text-sm">{rows.map((r) => (
-          <li key={r.adm} className="flex justify-between gap-2 py-2"><span><b>{r.name}</b> <span className="text-xs text-muted-foreground">{r.adm} · {r.cls}</span></span><span className={r.days.length >= 5 ? "font-semibold text-destructive" : "text-warning"}>{r.days.length} days</span></li>
+          <li key={r.adm} className="flex justify-between gap-2 py-2"><span><b>{r.name}</b> <span className="text-xs text-muted-foreground">{r.adm} · {r.cls}</span></span><span className={r.days.length >= 5 ? "font-semibold text-destructive" : "font-medium"}>{r.days.length} days</span></li>
         ))}</ul>)}
       <p className="mt-2 text-xs text-muted-foreground">5+ days: contact parents and refer to the school-based support team. Excused absences are not counted.</p>
     </Card>
