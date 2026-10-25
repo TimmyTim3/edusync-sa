@@ -30,7 +30,7 @@ export function GateRegister({ schoolId }: { schoolId: string }) {
     if (kind === "early_departure" && (!col.name.trim() || !col.checked)) { toast.error("Enter who is collecting and confirm you checked their ID"); return; }
     setBusy(true);
     const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("gate_logs").insert({ school_id: schoolId, student_id: who.id, kind, reason, logged_by: u.user?.id, ...(kind === "early_departure" ? { collected_by: col.name.trim(), collector_relationship: col.rel, collector_id_checked: true } : {}) });
+    const { error } = await supabase.from("gate_logs").insert({ school_id: schoolId, student_id: who.id, kind, reason, logged_by: u.user?.id ?? null, ...(kind === "early_departure" ? { collected_by: col.name.trim(), collector_relationship: col.rel, collector_id_checked: true } : {}) });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
     toast.success(`${who.first_name} ${kind === "late_arrival" ? "logged as late" : "signed out"}`);
