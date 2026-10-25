@@ -53,7 +53,7 @@ export function PrincipalDashboard() {
         const candidates = Array.from({ length: 14 }, (_, i) => new Date(base.getTime() - i * 86400000).toISOString().slice(0, 10));
         const counts = await Promise.all(candidates.map((d) => c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", d))));
         const idx = counts.findIndex((n) => n >= roll * 0.5);
-        if (idx >= 0) day = candidates[idx];
+        if (idx >= 0) day = candidates[idx] ?? day;
       }
       const [[school, students, parents, teachers, positive, negative, classesRes, noticesRes], marked, present, late] = await Promise.all([
         basicsP,
