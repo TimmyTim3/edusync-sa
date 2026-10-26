@@ -496,7 +496,7 @@ export function SubjectAllocation({ schoolId }: { schoolId: string }) {
   const qc = useQueryClient();
   const t = useTeachers(schoolId);
   const [f, setF] = useState({ teacher: "", subject: "", classes: [] as string[] });
-  const subjects = useQuery({ queryKey: ["subjects", schoolId], queryFn: async () => (await supabase.from("subjects").select("id, name").eq("school_id", schoolId).order("name")).data ?? [] });
+  const subjects = useQuery({ queryKey: ["subjects", schoolId], queryFn: async () => (await supabase.from("subjects").select("id, name").eq("school_id", schoolId).eq("archived", false).order("name")).data ?? [] });
   const classes = useQuery({ queryKey: ["classes-teachers", schoolId], queryFn: async () => (await supabase.from("classes").select("id, name, grade, class_teacher_id").eq("school_id", schoolId).order("grade").order("name")).data ?? [] });
   const rows = useQuery({
     queryKey: ["allocations", schoolId, f.teacher], enabled: !!f.teacher,
