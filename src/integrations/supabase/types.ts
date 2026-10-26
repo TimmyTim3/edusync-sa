@@ -1446,21 +1446,30 @@ export type Database = {
       }
       subjects: {
         Row: {
+          archived: boolean
           code: string | null
+          grades: string | null
           id: string
           name: string
+          phase: string | null
           school_id: string
         }
         Insert: {
+          archived?: boolean
           code?: string | null
+          grades?: string | null
           id?: string
           name: string
+          phase?: string | null
           school_id: string
         }
         Update: {
+          archived?: boolean
           code?: string | null
+          grades?: string | null
           id?: string
           name?: string
+          phase?: string | null
           school_id?: string
         }
         Relationships: [
