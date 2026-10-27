@@ -23,16 +23,38 @@ type NoteRow = {
 
 type Counted = { label: string; count: number; extra?: string };
 
+export type Offender = {
+  admission: string;
+  learner: string;
+  grade: string;
+  cls: string;
+  count: number;
+  highestLevel: string;
+};
+
+export type SeriousIncident = {
+  date: string;
+  admission: string;
+  student: string;
+  grade: string;
+  cls: string;
+  category: string;
+  severity: string;
+  level: string;
+  points: number;
+  note: string;
+};
+
 export type Snapshot = {
   generated_at: string;
   total: number;
   positive: number;
   negative: number;
-  offenders: Counted[];
+  offenders: Offender[];
   classes: Counted[];
   categories: Counted[];
   trend: Counted[];
-  serious: { student: string; category: string; severity: string; note: string; date: string }[];
+  serious: SeriousIncident[];
   register?: { date: string; admission: string; learner: string; grade: string; cls: string; type: string; category: string; level: string; points: number; note: string }[];
 };
 
@@ -113,12 +135,66 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
         });
       }
       const negatives = rows.filter((r) => !r.is_positive);
+
+      // Repeat offenders grouped by unique student
+      const offenderMap = new Map<string, { admission: string; learner: string; grade: string; cls: string; count: number; maxPts: number }>();
+      for (const r of negatives) {
+        if (!r.students) continue;
+        const sid = r.students.id;
+        const c = r.students.class_id ? classMap.get(r.students.class_id) : undefined;
+        const pts = Math.abs(r.points);
+        const existing = offenderMap.get(sid);
+        if (existing) {
+          existing.count++;
+          if (pts > existing.maxPts) existing.maxPts = pts;
+        } else {
+          offenderMap.set(sid, {
+            admission: r.students.admission_no ?? "—",
+            learner: `${r.students.last_name}, ${r.students.first_name}`,
+            grade: c?.grade ?? "",
+            cls: c?.name ?? "Unassigned",
+            count: 1,
+            maxPts: pts,
+          });
+        }
+      }
+      const offenders: Offender[] = [...offenderMap.values()]
+        .map((o) => ({
+          admission: o.admission,
+          learner: o.learner,
+          grade: o.grade,
+          cls: o.cls,
+          count: o.count,
+          highestLevel: LEVEL(-o.maxPts),
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15);
+
+      const serious: SeriousIncident[] = negatives
+        .filter((r) => r.severity === "high" || r.severity === "serious" || r.points <= -10)
+        .slice(0, 50)
+        .map((r) => {
+          const c = r.students?.class_id ? classMap.get(r.students.class_id) : undefined;
+          return {
+            date: r.created_at.slice(0, 10),
+            admission: r.students?.admission_no ?? "—",
+            student: r.students ? `${r.students.last_name}, ${r.students.first_name}` : "Unknown",
+            grade: c?.grade ?? "",
+            cls: c?.name ?? "Unassigned",
+            category: r.category,
+            severity: r.severity,
+            level: LEVEL(r.points),
+            points: r.points,
+            note: r.note,
+          };
+        });
+
       const snap: Snapshot = {
         generated_at: new Date().toISOString(),
         total: rows.length,
         positive: rows.length - negatives.length,
         negative: negatives.length,
-        offenders: tally(negatives.map((r) => (r.students ? `${r.students.first_name} ${r.students.last_name}` : "Unknown"))).slice(0, 15),
+        offenders,
         classes: tally(
           negatives.map((r) => {
             const c = r.students?.class_id ? classMap.get(r.students.class_id) : undefined;
@@ -127,21 +203,20 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
         ).slice(0, 15),
         categories: tally(negatives.map((r) => r.category)).slice(0, 15),
         trend: tally(negatives.map((r) => weekKey(r.created_at))).sort((a, b) => a.label.localeCompare(b.label)),
-        serious: negatives
-          .filter((r) => r.severity === "high" || r.severity === "serious" || r.points <= -10)
-          .slice(0, 50)
-          .map((r) => ({
-            student: r.students ? `${r.students.first_name} ${r.students.last_name}` : "Unknown",
-            category: r.category,
-            severity: r.severity,
-            note: r.note,
-            date: r.created_at.slice(0, 10),
-          })),
+        serious,
         register: rows.map((r) => {
           const c = r.students?.class_id ? classMap.get(r.students.class_id) : undefined;
           return {
-            date: r.created_at.slice(0, 10), admission: r.students?.admission_no ?? "", learner: r.students ? `${r.students.last_name}, ${r.students.first_name}` : "Unknown",
-            grade: c?.grade ?? "", cls: c?.name ?? "", type: r.is_positive ? "Merit" : "Demerit", category: r.category, level: LEVEL(r.points), points: r.points, note: r.note,
+            date: r.created_at.slice(0, 10),
+            admission: r.students?.admission_no ?? "",
+            learner: r.students ? `${r.students.last_name}, ${r.students.first_name}` : "Unknown",
+            grade: c?.grade ?? "",
+            cls: c?.name ?? "",
+            type: r.is_positive ? "Merit" : "Demerit",
+            category: r.category,
+            level: LEVEL(r.points),
+            points: r.points,
+            note: r.note,
           };
         }),
       };
@@ -159,47 +234,65 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
     const title = `Disciplinary report ${filters.from} to ${filters.to}${filters.grade ? ` · Grade ${filters.grade}` : ""}`;
     const { error } = await supabase.from("disciplinary_reports").insert({
       school_id: schoolId,
+      created_by: user.id,
       title,
+      period_start: filters.from,
+      period_end: filters.to,
       filters: filters as unknown as Json,
       snapshot: snapshot as unknown as Json,
       prepared_for_hearing: hearing,
-      created_by: user.id,
     });
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success(hearing ? "Saved and marked for a disciplinary hearing" : "Saved to the archive");
+    toast.success(hearing ? "Report tagged for SGB hearing" : "Saved to archive");
     void qc.invalidateQueries({ queryKey: ["disc-archive", schoolId] });
   };
 
   const csv = async (snap: Snapshot, name: string) => {
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
-    const head = [["DEPARTMENT OF BASIC EDUCATION — LEARNER DISCIPLINE REGISTER"], ["Code of Conduct report (SASA s.8)"], [`Period: ${name}`], [`Generated: ${new Date(snap.generated_at).toLocaleString("en-ZA")}`], []];
-    const levels = new Map<string, { m: number; d: number }>();
-    for (const r of snap.register ?? []) {
-      const k = String(r.level ?? "—");
-      const v = levels.get(k) ?? { m: 0, d: 0 };
-      if (String(r.type).toLowerCase().startsWith("merit")) v.m++; else v.d++;
-      levels.set(k, v);
-    }
-    const summary = XLSX.utils.aoa_to_sheet([...head,
-      ["1. SUMMARY OF INCIDENTS"], ["Measure", "Total"], ["Behaviour entries", snap.total], ["Merits", snap.positive], ["Demerits / concerns", snap.negative], [],
-      ["2. SASA LEVEL BREAKDOWN"], ["Level", "Merits", "Demerits"], ...[...levels.entries()].sort().map(([k, v]) => [k, v.m, v.d]), [],
-      ["3. TOP REPEAT OFFENDERS"], ["Learner", "Incidents"], ...snap.offenders.slice(0, 10).map((x) => [x.label, x.count]), [],
-      ["4. SIGN-OFF"], ["Principal (name & signature):", ""], ["Chairperson, SGB Disciplinary Committee:", ""], ["Date:", ""], ["School stamp:", ""]]);
+    const head = [[school.data?.name ?? "School"], ["DBE Learner Discipline Register"], [`Period: ${filters.from} to ${filters.to}`], [`Generated: ${new Date(snap.generated_at).toLocaleString("en-ZA")}`], []];
+    const levels = [1, 2, 3, 4, 5].map((lvl) => {
+      const reg = snap.register ?? [];
+      const m = reg.filter((r) => r.level === `Level ${lvl}` && r.type === "Merit").length;
+      const d = reg.filter((r) => r.level === `Level ${lvl}` && r.type === "Demerit").length;
+      return [`Level ${lvl}`, { m, d }] as const;
+    });
+    const summary = XLSX.utils.aoa_to_sheet([
+      ...head,
+      ["1. SUMMARY OF INCIDENTS"], ["Measure", "Total"],
+      ["Total behaviour entries", snap.total], ["Merits", snap.positive], ["Demerits / concerns", snap.negative], [],
+      ["2. SASA LEVEL BREAKDOWN"], ["Level", "Merits", "Demerits"], ...levels.map(([k, v]) => [k, v.m, v.d]), [],
+      ["3. TOP REPEAT OFFENDERS"], ["Admission No", "Learner", "Class", "Incidents", "Highest SASA Level"], ...snap.offenders.slice(0, 10).map((x) => [x.admission, x.learner, x.cls, x.count, x.highestLevel]), [],
+      ["4. SIGN-OFF"], ["Principal (name & signature):", ""], ["Chairperson, SGB Disciplinary Committee:", ""], ["Date:", ""], ["School stamp:", ""],
+    ]);
     summary["!cols"] = [{ wch: 42 }, { wch: 14 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(wb, summary, "Summary");
-    const reg = XLSX.utils.aoa_to_sheet([...head, ["No.", "Date", "Admission No", "Learner (Surname, Name)", "Grade", "Class", "Type", "Offence / Merit", "SASA Level", "Points", "Description"],
-      ...(snap.register ?? []).map((r, i) => [i + 1, r.date, r.admission, r.learner, r.grade, r.cls, r.type, r.category, r.level, r.points, r.note])]);
+
+    const reg = XLSX.utils.aoa_to_sheet([
+      ...head,
+      ["No.", "Date", "Admission No", "Learner (Surname, Name)", "Grade", "Class", "Type", "Offence / Merit", "SASA Level", "Points", "Description"],
+      ...(snap.register ?? []).map((r, i) => [i + 1, r.date, r.admission, r.learner, r.grade, r.cls, r.type, r.category, r.level, r.points, r.note]),
+    ]);
     reg["!cols"] = [5, 11, 14, 26, 6, 8, 9, 22, 10, 7, 50].map((wch) => ({ wch }));
     XLSX.utils.book_append_sheet(wb, reg, "Incident Register");
+
     const table = (title: string, items: Counted[], h: string) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([...head, [h, "Incidents"], ...items.map((x) => [x.label, x.count])]), title);
-    table("Repeat Offenders", snap.offenders, "Learner");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ...head,
+      ["Admission No", "Learner", "Class", "Incidents", "Highest SASA Level"],
+      ...snap.offenders.map((x) => [x.admission, x.learner, x.cls, x.count, x.highestLevel]),
+    ]), "Repeat Offenders");
     table("By Class", snap.classes, "Class");
     table("By Offence", snap.categories, "Offence");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([...head, ["Date", "Learner", "Offence", "Severity", "Description"], ...snap.serious.map((x) => [x.date, x.student, x.category, x.severity, x.note])]), "Serious - SGB Hearing");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ...head,
+      ["Date", "Admission No", "Learner", "Class", "Offence", "SASA Level", "Severity", "Description"],
+      ...snap.serious.map((x) => [x.date, x.admission, x.student, x.cls, x.category, x.level, x.severity, x.note]),
+    ]), "Serious - SGB Hearing");
+
     XLSX.writeFile(wb, `${name.replace(/[^\w-]+/g, "_")}.xlsx`);
   };
 
@@ -310,24 +403,5 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
       </Card>
     </div>
   );
-}
-
-function Section({ title, items }: { title: string; items: Counted[] }) {
-  return (
-    <div>
-      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
-      {items.length === 0 ? (
-        <Empty text="Nothing recorded." />
-      ) : (
-        <ul className="space-y-1 text-sm">
-          {items.map((i) => (
-            <li key={i.label} className="flex items-center justify-between gap-2">
-              <span className="truncate">{i.label}</span>
-              <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground">{i.count}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
+               }
+    
