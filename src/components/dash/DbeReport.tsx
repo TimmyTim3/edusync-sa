@@ -37,8 +37,8 @@ export function reportHtml(s: Snapshot, period: string, school: string, logoAbs:
 <p style="text-align:center;font-size:9pt">Code of Conduct for Learners — South African Schools Act 84 of 1996, Section 8<br/>Period: ${esc(period)} · Generated ${esc(new Date(s.generated_at).toLocaleString("en-ZA"))}</p>
 <h4>1. Summary of incidents</h4><table style="border-collapse:collapse;width:100%">${th(["Measure", "Total"])}${td(["Behaviour entries", s.total])}${td(["Merits", s.positive])}${td(["Demerits / concerns", s.negative])}</table>
 <h4>2. SASA level breakdown</h4><table style="border-collapse:collapse;width:100%">${th(["Level", "Merits", "Demerits"])}${levelsOf(s).map(([k, v]) => td([k, v.m, v.d])).join("")}</table>
-<h4>3. Repeat offenders</h4><table style="border-collapse:collapse;width:100%">${th(["Learner", "Incidents"])}${s.offenders.slice(0, 10).map((o) => td([o.label, o.count])).join("")}</table>
-<h4>4. Serious incidents referred to SGB</h4><table style="border-collapse:collapse;width:100%">${th(["Date", "Learner", "Offence", "Severity", "Description"])}${s.serious.map((x) => td([x.date, x.student, x.category, x.severity, x.note])).join("")}</table>
+<h4>3. Repeat offenders</h4><table style="border-collapse:collapse;width:100%">${th(["Adm No", "Learner (Surname, Name)", "Class", "Incidents", "Highest SASA Level"])}${s.offenders.slice(0, 15).map((o) => td([o.admission || "—", o.learner, o.cls, o.count, o.highestLevel])).join("")}</table>
+<h4>4. Serious incidents referred to SGB</h4><table style="border-collapse:collapse;width:100%">${th(["Date", "Adm No", "Learner", "Class", "Offence", "Level", "Severity", "Description"])}${s.serious.map((x) => td([x.date, x.admission || "—", x.student, x.cls, x.category, x.level, x.severity, x.note])).join("")}</table>
 <h4>5. Incident register</h4><table style="border-collapse:collapse;width:100%">${th(["No.", "Date", "Adm No", "Learner", "Class", "Type", "Offence / Merit", "Level", "Pts", "Description"])}${(s.register ?? []).map((r, i) => td([i + 1, r.date, r.admission, r.learner, r.cls, r.type, r.category, r.level, r.points, r.note])).join("")}</table>
 <h4>6. Sign-off</h4><p>Principal (name &amp; signature): ______________________ Date: __________</p><p>Chairperson, SGB Disciplinary Committee: ______________________ Date: __________</p><p>School stamp:</p>
 </body></html>`;
@@ -93,15 +93,63 @@ export function DbeReport({ snapshot: s, period, school }: { snapshot: Snapshot;
           </div>
           <div>
             <H n={3} t="Repeat offenders" />
-            <table className="w-full border-collapse"><thead><tr><Th>Learner</Th><Th>Incidents</Th></tr></thead>
-              <tbody>{s.offenders.slice(0, 10).map((o) => <tr key={o.label}><Td>{o.label}</Td><Td>{o.count}</Td></tr>)}</tbody></table>
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <Th>Adm No</Th>
+                  <Th>Learner</Th>
+                  <Th>Class</Th>
+                  <Th>Count</Th>
+                  <Th>Level</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.offenders.slice(0, 10).map((o, idx) => (
+                  <tr key={idx}>
+                    <Td className="whitespace-nowrap font-mono">{o.admission || "—"}</Td>
+                    <Td className="font-medium">{o.learner}</Td>
+                    <Td>{o.cls}</Td>
+                    <Td className="font-bold text-destructive">{o.count}</Td>
+                    <Td>{o.highestLevel}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
         <H n={4} t="Serious incidents referred to the SGB" />
         {s.serious.length === 0 ? <p className="text-muted-foreground">None in this period.</p> : (
-          <table className="w-full border-collapse"><thead><tr><Th>Date</Th><Th>Learner</Th><Th>Offence</Th><Th>Severity</Th></tr></thead>
-            <tbody>{s.serious.slice(0, 25).map((x, i) => <tr key={i}><Td className="whitespace-nowrap">{x.date}</Td><Td>{x.student}</Td><Td>{x.category}</Td><Td className="capitalize">{x.severity}</Td></tr>)}</tbody></table>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse">
+              <thead>
+                <tr>
+                  <Th>Date</Th>
+                  <Th>Adm No</Th>
+                  <Th>Learner</Th>
+                  <Th>Class</Th>
+                  <Th>Offence</Th>
+                  <Th>Level</Th>
+                  <Th>Severity</Th>
+                  <Th>Description</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.serious.slice(0, 30).map((x, i) => (
+                  <tr key={i}>
+                    <Td className="whitespace-nowrap font-mono">{x.date}</Td>
+                    <Td className="whitespace-nowrap font-mono">{x.admission || "—"}</Td>
+                    <Td className="whitespace-nowrap font-medium">{x.student}</Td>
+                    <Td>{x.cls}</Td>
+                    <Td>{x.category}</Td>
+                    <Td className="font-semibold text-destructive">{x.level}</Td>
+                    <Td className="capitalize">{x.severity}</Td>
+                    <Td className="text-muted-foreground">{x.note}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         <H n={5} t={`Incident register (${reg.length} entries)`} />
