@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import logo from "@/assets/dbe-logo.png.asset.json";
 import type { Snapshot } from "./DisciplinaryReports";
 
-export const DBE_LOGO_URL = logo.url;
+export const DBE_LOGO_URL = "/dbe-logo.png";
 
 const levelsOf = (s: Snapshot) => {
   const m = new Map<string, { m: number; d: number }>();
@@ -65,7 +64,8 @@ export function DbeReport({ snapshot: s, period, school }: { snapshot: Snapshot;
     <div className="overflow-x-auto rounded-lg bg-muted/50 p-2 sm:p-6">
       <article className="dbe-print mx-auto w-full max-w-[210mm] bg-card p-5 font-sans text-[11px] leading-snug text-card-foreground shadow-lift sm:p-10 sm:text-xs">
         <header className="flex flex-col items-center border-b-4 border-double border-foreground pb-3 text-center">
-          <img src={logo.url} alt="Department of Basic Education, Republic of South Africa" className="h-16 w-auto sm:h-20" />
+<img src={DBE_LOGO_URL} alt="Department of Basic Education, Republic of South Africa" className="h-16 w-auto sm:h-20" />
+          
           <p className="mt-3 text-base font-bold uppercase sm:text-lg">{school}</p>
           <p className="text-sm font-bold tracking-widest">LEARNER DISCIPLINE REGISTER</p>
           <p className="mt-1 text-muted-foreground">Code of Conduct for Learners — South African Schools Act 84 of 1996, Section 8</p>
