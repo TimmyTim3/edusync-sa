@@ -236,8 +236,6 @@ export function DisciplinaryReports({ schoolId }: { schoolId: string | null }) {
       school_id: schoolId,
       created_by: user.id,
       title,
-      period_start: filters.from,
-      period_end: filters.to,
       filters: filters as unknown as Json,
       snapshot: snapshot as unknown as Json,
       prepared_for_hearing: hearing,
