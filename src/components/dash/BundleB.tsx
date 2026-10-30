@@ -10,6 +10,7 @@ import { Card, Empty, today } from "./Shell";
 import { claimMyChild, reportAbsence } from "@/lib/parent.functions";
 import { evaluatePromotion, type PromotionOutcome } from "@/lib/npppr";
 import { finalMark, truncatePct } from "@/lib/caps-marks";
+import { compressMedicalImage } from "@/lib/image-compress";
 
 const sel = "h-9 w-full rounded-md border bg-background px-2 text-sm";
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong");
@@ -57,38 +58,89 @@ export function ClaimChild({ userId, startOpen = false, onLinked }: { userId: st
 
 /* ---------------- Parent: report an absence ---------------- */
 const REASONS = ["Illness", "Doctor / clinic appointment", "Family emergency", "Bereavement", "Religious observance", "Other"];
+
 export function ReportAbsence({ studentId, name }: { studentId: string; name: string }) {
   const qc = useQueryClient();
   const send = useServerFn(reportAbsence);
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ date: today(), reason: REASONS[0] ?? "Illness", detail: "" });
+  const [cert, setCert] = useState<{ base64: string; sizeKb: number; origKb: number } | null>(null);
+  const [compressing, setCompressing] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setCompressing(true);
+      const res = await compressMedicalImage(file, 1200, 0.72);
+      setCert({ base64: res.base64, sizeKb: res.compressedSizeKb, origKb: res.originalSizeKb });
+      toast.success(`Doctor note compressed: ${res.compressedSizeKb} KB (saved ${res.originalSizeKb - res.compressedSizeKb} KB)`);
+    } catch {
+      toast.error("Could not process this image. Please take a photo or select a JPEG/PNG.");
+    } finally {
+      setCompressing(false);
+    }
+  };
+
   const submit = async () => {
     setBusy(true);
     try {
-      const r = (await send({ data: { studentId, ...f } })) as { already?: boolean; status?: string } | undefined;
+      const r = (await send({
+        data: { studentId, ...f, certificateBase64: cert?.base64 }
+      })) as { already?: boolean; status?: string } | undefined;
+
       if (r?.already) toast.info(`The register already shows ${name} as ${r.status} for that day`);
-      else toast.success(`Absence reported for ${name}`);
+      else toast.success(`Absence & medical note reported for ${name}`);
       setOpen(false);
+      setCert(null);
       await qc.invalidateQueries({ queryKey: ["child-detail", studentId] });
-    } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
   };
+
   if (!open) return <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>Report an absence</Button>;
+
   return (
     <Card title={`Report absence — ${name}`}>
       <div className="grid gap-2 sm:grid-cols-2">
         <Input type="date" aria-label="Day absent" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
         <select className={sel} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })}>{REASONS.map((r) => <option key={r}>{r}</option>)}</select>
       </div>
-      <Textarea className="mt-2" placeholder="Details (optional)" value={f.detail} onChange={(e) => setF({ ...f, detail: e.target.value })} />
-      <div className="mt-2 flex gap-2">
-        <Button size="sm" disabled={busy} onClick={submit}>{busy ? "Sending…" : "Send to school"}</Button>
-        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+      <Textarea className="mt-2" placeholder="Details (e.g. Diagnosed with flu, bed rest ordered by doctor)" value={f.detail} onChange={(e) => setF({ ...f, detail: e.target.value })} />
+      
+      <div className="mt-3 rounded-lg border border-dashed p-3">
+        <label className="block text-xs font-medium text-foreground mb-1">
+          Attach Doctor's Note / Medical Certificate (Optional)
+        </label>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          disabled={compressing || busy}
+          onChange={(e) => void onFileChange(e)}
+          className="block w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-secondary file:px-2.5 file:py-1 file:text-xs file:font-semibold hover:file:bg-secondary/80"
+        />
+        {compressing && <p className="mt-1 text-xs text-muted-foreground animate-pulse">Compressing photo...</p>}
+        {cert && (
+          <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+            ✓ Certificate attached ({cert.sizeKb} KB · Saved {cert.origKb - cert.sizeKb} KB)
+            <button type="button" onClick={() => setCert(null)} className="ml-2 text-destructive underline text-[11px]">Remove</button>
+          </p>
+        )}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <Button size="sm" disabled={busy || compressing} onClick={submit}>{busy ? "Submitting…" : "Send to school"}</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setOpen(false); setCert(null); }}>Cancel</Button>
       </div>
     </Card>
   );
 }
-
+  
 /* ---------------- Teacher: edit / delete posted homework ---------------- */
 type Hw = { id: string; title: string; description: string | null; due_date: string };
 export function HomeworkEditor({ classId }: { classId: string }) {
