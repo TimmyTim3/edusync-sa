@@ -58,14 +58,15 @@ export const claimMyChild = createServerFn({ method: "POST" })
     return { ok: true, studentName: `${student.first_name} ${student.last_name}` };
   });
 
-/** Parent reports an absence for one of their children; recorded as excused with the guardian's reason. */
+/** Parent reports an absence for one of their children; recorded as excused with the guardian's reason and medical cert if attached. */
 export const reportAbsence = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { studentId: string; date: string; reason: string; detail?: string }) => ({
+  .inputValidator((input: { studentId: string; date: string; reason: string; detail?: string; certificateBase64?: string }) => ({
     studentId: String(input?.studentId ?? ""),
     date: DATE.test(input?.date ?? "") ? input.date : "",
     reason: String(input?.reason ?? "").slice(0, 80),
     detail: String(input?.detail ?? "").slice(0, 300),
+    certificateBase64: input?.certificateBase64 ? String(input.certificateBase64).slice(0, 350000) : undefined,
   }))
   .handler(async ({ data, context }) => {
     const admin = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
@@ -79,11 +80,58 @@ export const reportAbsence = createServerFn({ method: "POST" })
     if (!stu) throw new Error("Learner not found");
     const { data: existing } = await admin.from("attendance_records").select("status").eq("student_id", data.studentId).eq("date", data.date).maybeSingle();
     if (existing) return { already: true as const, status: existing.status };
+    
     const claims = context.claims as Record<string, unknown>;
-    const note = `${String(claims["name"] ?? "") || "Guardian"} reported: ${data.reason}${data.detail ? " — " + data.detail : ""}`;
+    const parentName = String(claims["name"] ?? "") || "Guardian";
+
+    // Upload compressed certificate to cloud storage if provided
+    let certUrl = "";
+    if (data.certificateBase64) {
+      try {
+        const raw = data.certificateBase64.replace(/^data:image\/\w+;base64,/, "");
+        const binaryStr = atob(raw);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        const path = `${stu.school_id}/${data.studentId}/${data.date}-${Date.now()}.jpg`;
+        const { error: upErr } = await admin.storage
+          .from("medical-certificates")
+          .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
+        if (!upErr) {
+          const { data: pub } = admin.storage.from("medical-certificates").getPublicUrl(path);
+          certUrl = pub.publicUrl;
+        }
+      } catch {
+        // Continue gracefully even if storage bucket is not yet provisioned
+      }
+    }
+
+    const note = `${parentName} reported: ${data.reason}${data.detail ? " — " + data.detail : ""}${certUrl ? ` [Medical note: ${certUrl}]` : ""}`;
+    
+    // Save to daily attendance register
     const { error } = await admin.from("attendance_records")
       .insert({ school_id: stu.school_id, student_id: data.studentId, class_id: stu.class_id, date: data.date, status: "excused", note, marked_by: context.userId });
     if (error) throw new Error(error.message);
-    await admin.from("audit_logs").insert({ actor_id: context.userId, actor_email: String(claims["email"] ?? "") || null, school_id: stu.school_id, action: "parent_absence_report", details: { student_id: data.studentId, date: data.date, reason: data.reason } });
+
+    // Also mirror to Front Office absence reports table so clerks and reception see it
+    await admin.from("absence_reports").insert({
+      school_id: stu.school_id,
+      student_id: data.studentId,
+      absence_date: data.date,
+      reason: `${data.reason}${data.detail ? ` (${data.detail})` : ""}${certUrl ? " [Dr Note Attached]" : ""}`,
+      reported_by: parentName,
+      channel: "parent_portal",
+      logged_by: context.userId,
+    });
+
+    await admin.from("audit_logs").insert({
+      actor_id: context.userId,
+      actor_email: String(claims["email"] ?? "") || null,
+      school_id: stu.school_id,
+      action: "parent_absence_report",
+      details: { student_id: data.studentId, date: data.date, reason: data.reason, has_certificate: !!certUrl }
+    });
     return { already: false as const, ok: true };
   });
+          
