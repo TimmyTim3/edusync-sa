@@ -227,23 +227,23 @@ export function TeacherDashboard() {
                 {st.filter((s) => (stFilter === "all" || (marks[s.id] ?? "present") === stFilter) && (!stTerm.trim() || `${s.first_name} ${s.last_name} ${s.admission_no}`.toLowerCase().includes(stTerm.trim().toLowerCase()))).map((s) => (
                   <tr key={s.id} className="border-b align-top">
                     <td className="py-1.5"><button type="button" className="text-left hover:text-primary hover:underline" onClick={() => setProfile(s)}>{s.last_name}, {s.first_name}</button> <span className="text-xs text-muted-foreground">{s.admission_no}</span>
-                      {notes[s.id] && reasonFor !== s.id && ["absent", "excused", "late"].includes(marks[s.id] ?? "") && (
-  <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-    <button type="button" className="text-left text-xs text-muted-foreground hover:text-primary" onClick={() => setReasonFor(s.id)}>
-      Reason: {notes[s.id].replace(/\s*\[Medical note:.*?\]/, "")} ✎
-    </button>
-    {notes[s.id].includes("[Medical note:") && (
-      <a
-        href={notes[s.id].match(/\[Medical note:\s*(.*?)\]/)?.[1] ?? "#"}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary hover:underline"
-      >
-        🩺 Doctor Note
-      </a>
-    )}
-  </div>
-)}
+                                            {notes[s.id] && reasonFor !== s.id && ["absent", "excused", "late"].includes(marks[s.id] ?? "") && (
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                          <button type="button" className="text-left text-xs text-muted-foreground hover:text-primary" onClick={() => setReasonFor(s.id)}>
+                            Reason: {(notes[s.id] ?? "").replace(/\s*\[Medical note:.*?\]/, "")} ✎
+                          </button>
+                          {(notes[s.id] ?? "").includes("[Medical note:") && (
+                            <a
+                              href={(notes[s.id] ?? "").match(/\[Medical note:\s*(.*?)\]/)?.[1] ?? "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary hover:underline"
+                            >
+                              🩺 Doctor Note
+                            </a>
+                          )}
+                        </div>
+                      )}
                       
                       {reasonFor === s.id && <div className="mt-1 flex flex-wrap gap-1">
                         {REASONS.map((r) => <button key={r} type="button" className={`rounded border px-1.5 py-0.5 text-xs ${notes[s.id] === r ? "border-primary bg-primary/15 text-primary" : "hover:bg-muted"}`} onClick={() => { setNotes((n) => ({ ...n, [s.id]: r })); setReasonFor(null); }}>{r}</button>)}
