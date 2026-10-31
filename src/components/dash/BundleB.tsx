@@ -125,20 +125,35 @@ export function ReportAbsence({ studentId, name }: { studentId: string; name: st
       </div>
       <Textarea className="mt-2" placeholder="Details (e.g. Diagnosed with flu, bed rest ordered by doctor)" value={f.detail} onChange={(e) => setF({ ...f, detail: e.target.value })} />
       
-      <div className="mt-3 rounded-lg border border-dashed p-3">
-        <label className="block text-xs font-medium text-foreground mb-1">
+            <div className="mt-3 rounded-lg border border-dashed p-3">
+        <label className="block text-xs font-medium text-foreground mb-1.5">
           Attach Doctor's Note / Medical Certificate (Optional)
         </label>
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          disabled={compressing || busy}
-          onChange={(e) => void onFileChange(e)}
-          className="block w-full text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-secondary file:px-2.5 file:py-1 file:text-xs file:font-semibold hover:file:bg-secondary/80"
-        />
-        {compressing && <p className="mt-1 text-xs text-muted-foreground animate-pulse">Compressing photo...</p>}
-        {cert && (
+        <div className="flex flex-wrap gap-2">
+          <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-md bg-secondary px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-secondary/80">
+            📸 Take Photo
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              disabled={compressing || busy}
+              onChange={(e) => void onFileChange(e)}
+              className="hidden"
+            />
+          </label>
+          <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent text-foreground">
+            🖼️ Choose from Gallery
+            <input
+              type="file"
+              accept="image/*"
+              disabled={compressing || busy}
+              onChange={(e) => void onFileChange(e)}
+              className="hidden"
+            />
+          </label>
+        </div>
+        {compressing && <p className="mt-2 text-xs text-muted-foreground animate-pulse">Compressing photo...</p>}
+              
           <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
             ✓ Certificate attached ({cert.sizeKb} KB · Saved {cert.origKb - cert.sizeKb} KB)
             <button type="button" onClick={() => setCert(null)} className="ml-2 text-destructive underline text-[11px]">Remove</button>
