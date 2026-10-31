@@ -83,15 +83,28 @@ export function ReportAbsence({ studentId, name }: { studentId: string; name: st
     }
   };
 
-  const submit = async () => {
+    const submit = async () => {
     setBusy(true);
     try {
-      const r = (await send({
-        data: { studentId, ...f, certificateBase64: cert?.base64 }
-      })) as { already?: boolean; status?: string } | undefined;
+      const payload: {
+        studentId: string;
+        date: string;
+        reason: string;
+        detail: string;
+        certificateBase64?: string;
+      } = {
+        studentId,
+        ...f,
+      };
+
+      if (cert?.base64) {
+        payload.certificateBase64 = cert.base64;
+      }
+
+      const r = (await send({ data: payload })) as { already?: boolean; status?: string } | undefined;
 
       if (r?.already) toast.info(`The register already shows ${name} as ${r.status} for that day`);
-      else toast.success(`Absence & medical note reported for ${name}`);
+      else toast.success(`Absence reported for ${name}${cert ? " with doctor note" : ""}`);
       setOpen(false);
       setCert(null);
       await qc.invalidateQueries({ queryKey: ["child-detail", studentId] });
@@ -101,7 +114,7 @@ export function ReportAbsence({ studentId, name }: { studentId: string; name: st
       setBusy(false);
     }
   };
-
+        
   if (!open) return <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>Report an absence</Button>;
 
   return (
