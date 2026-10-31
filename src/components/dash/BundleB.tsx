@@ -151,15 +151,15 @@ export function ReportAbsence({ studentId, name }: { studentId: string; name: st
               className="hidden"
             />
           </label>
-        </div>
+                </div>
         {compressing && <p className="mt-2 text-xs text-muted-foreground animate-pulse">Compressing photo...</p>}
-              
+        {cert && (
           <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
             ✓ Certificate attached ({cert.sizeKb} KB · Saved {cert.origKb - cert.sizeKb} KB)
             <button type="button" onClick={() => setCert(null)} className="ml-2 text-destructive underline text-[11px]">Remove</button>
           </p>
         )}
-      </div>
+      </div>      
 
       <div className="mt-3 flex gap-2">
         <Button size="sm" disabled={busy || compressing} onClick={submit}>{busy ? "Submitting…" : "Send to school"}</Button>
