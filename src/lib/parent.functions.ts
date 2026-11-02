@@ -69,13 +69,19 @@ export const reportAbsence = createServerFn({ method: "POST" })
     certificateBase64: input?.certificateBase64 ? String(input.certificateBase64).slice(0, 350000) : undefined,
   }))
   .handler(async ({ data, context }) => {
-    const admin = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
     if (!data.date) throw new Error("Choose the day of the absence");
     if (data.date > new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)) throw new Error("Absences can be reported at most two weeks ahead");
-    const { data: parentIds } = await admin.from("parent_student").select("parent_id").eq("student_id", data.studentId);
-    if (!parentIds?.length) throw new Error("This learner is not linked to your account");
-    const { data: link } = await admin.from("parents").select("id").in("id", parentIds.map((p) => p.parent_id)).eq("user_id", context.userId).limit(1);
+    // Step 1: prove the link using the parent's OWN session (works on any host, RLS-scoped).
+    const { data: myParents, error: pErr } = await context.supabase.from("parents").select("id").eq("user_id", context.userId);
+    if (pErr) throw new Error(`Could not check your parent profile: ${pErr.message}`);
+    const myIds = (myParents ?? []).map((p) => p.id);
+    if (!myIds.length) throw new Error("This learner is not linked to your account");
+    const { data: link, error: lErr } = await context.supabase.from("parent_student").select("id").eq("student_id", data.studentId).in("parent_id", myIds).limit(1);
+    if (lErr) throw new Error(`Could not check the learner link: ${lErr.message}`);
     if (!link?.length) throw new Error("This learner is not linked to your account");
+    // Step 2: privileged writes need the server admin key; report clearly when the host lacks it.
+    if (!process.env["SUPABASE_SERVICE_ROLE_KEY"]) throw new Error("The school server is not fully configured to save absence reports on this website. Please use the official EduSync address or contact the school.");
+    const admin = (await import("@/integrations/supabase/client.server")).supabaseAdmin;
     const { data: stu } = await admin.from("students").select("school_id, class_id").eq("id", data.studentId).single();
     if (!stu) throw new Error("Learner not found");
     const { data: existing } = await admin.from("attendance_records").select("status").eq("student_id", data.studentId).eq("date", data.date).maybeSingle();
