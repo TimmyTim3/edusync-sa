@@ -169,6 +169,13 @@
       "when": 1792973886052,
       "tag": "0023_subjects_curriculum_manager",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793611994940,
+      "tag": "0024_bundle_g_mark_governance",
+      "breakpoints": true
     }
   ]
 }

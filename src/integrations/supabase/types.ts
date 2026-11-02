@@ -102,11 +102,14 @@ export type Database = {
       }
       assessments: {
         Row: {
+          checked_at: string | null
+          checked_by: string | null
           class_id: string
           created_at: string
           created_by: string | null
           date: string
           id: string
+          locked_at: string | null
           max_marks: number
           published: boolean
           school_id: string
@@ -117,11 +120,14 @@ export type Database = {
           weight: number
         }
         Insert: {
+          checked_at?: string | null
+          checked_by?: string | null
           class_id: string
           created_at?: string
           created_by?: string | null
           date?: string
           id?: string
+          locked_at?: string | null
           max_marks?: number
           published?: boolean
           school_id: string
@@ -132,11 +138,14 @@ export type Database = {
           weight?: number
         }
         Update: {
+          checked_at?: string | null
+          checked_by?: string | null
           class_id?: string
           created_at?: string
           created_by?: string | null
           date?: string
           id?: string
+          locked_at?: string | null
           max_marks?: number
           published?: boolean
           school_id?: string
