@@ -13,6 +13,7 @@ import { PromotionPreview } from "./BundleB";
 import { GateRegister, TruancyAlerts } from "./BundleD";
 import { TimetablePanel } from "./Timetable";
 import { CurriculumManager } from "./Curriculum";
+import { HodMarkReview, YearTermManager } from "./Governance";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -110,8 +111,19 @@ export function PrincipalDashboard() {
         <TimetablePanel schoolId={schoolId} />
       ) : tab === "gate" && schoolId ? (
         <div className="grid gap-4 lg:grid-cols-2"><GateRegister schoolId={schoolId} /><TruancyAlerts schoolId={schoolId} /></div>
-      ) : tab === "staff" && schoolId ? (
-        <div className="grid gap-4 lg:grid-cols-2"><StaffIngest schoolId={schoolId} /><ClassTeacherAssign schoolId={schoolId} /><CurriculumManager schoolId={schoolId} /><SubjectAllocation schoolId={schoolId} /><ReliefManager schoolId={schoolId} /><RolloverWizard schoolId={schoolId} /><PromotionPreview schoolId={schoolId} /><TransferClearance schoolId={schoolId} /></div>
+            ) : tab === "staff" && schoolId ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <YearTermManager schoolId={schoolId} />
+          <HodMarkReview schoolId={schoolId} />
+          <StaffIngest schoolId={schoolId} />
+          <ClassTeacherAssign schoolId={schoolId} />
+          <CurriculumManager schoolId={schoolId} />
+          <SubjectAllocation schoolId={schoolId} />
+          <ReliefManager schoolId={schoolId} />
+          <RolloverWizard schoolId={schoolId} />
+          <PromotionPreview schoolId={schoolId} />
+          <TransferClearance schoolId={schoolId} />
+        </div>
       ) : tab === "discipline" ? (
         <DisciplinaryReports schoolId={schoolId} />
       ) : glance ? (
