@@ -61,10 +61,17 @@ function MasterLogin() {
 
   const google = async () => {
     setError(null);
-    const r = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: `${window.location.origin}/master-login`,
-    });
-    if (r.error) setError(r.error.message);
+    const redirect = `${window.location.origin}/master-login`;
+    // The managed sign-in helper only exists on Lovable-hosted addresses; elsewhere (e.g. Vercel) use standard OAuth.
+    const host = window.location.hostname;
+    const managed = host.endsWith(".lovable.app") || host.endsWith(".lovableproject.com") || host === "localhost";
+    if (managed) {
+      const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: redirect });
+      if (r.error) setError(r.error.message);
+      return;
+    }
+    const { error: oauthErr } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: redirect } });
+    if (oauthErr) setError(oauthErr.message);
   };
 
   return (
