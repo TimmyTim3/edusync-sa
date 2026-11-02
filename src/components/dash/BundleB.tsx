@@ -228,11 +228,14 @@ export function MarkbookEditor({ schoolId, classId, subjectId, students }: { sch
   const list = useQuery({
     queryKey: ["teacher-assessments", classId, subjectId],
     queryFn: async () => {
-      const { data } = await supabase.from("assessments").select("id, title, date, max_marks").eq("class_id", classId).eq("subject_id", subjectId).order("date", { ascending: false }).limit(50);
+      const { data } = await supabase.from("assessments").select("id, title, date, max_marks, checked_at, locked_at").eq("class_id", classId).eq("subject_id", subjectId).order("date", { ascending: false }).limit(50);
       return data ?? [];
     },
   });
   const a = list.data?.find((x) => x.id === aid);
+  const isLocked = Boolean(a?.locked_at);
+  const isChecked = Boolean(a?.checked_at);
+
   const load = async (id: string) => {
     setAid(id); setScores({});
     if (!id) return;
@@ -240,7 +243,7 @@ export function MarkbookEditor({ schoolId, classId, subjectId, students }: { sch
     setScores(Object.fromEntries((data ?? []).map((m) => [m.student_id, m.score == null ? "" : String(m.score)])));
   };
   const save = async () => {
-    if (!a) return;
+    if (!a || isLocked) return;
     const rows = Object.entries(scores).filter(([, v]) => v !== "").map(([student_id, v]) => ({ school_id: schoolId, assessment_id: a.id, student_id, score: Math.max(0, Math.min(Number(v), a.max_marks)) }));
     const cleared = Object.entries(scores).filter(([, v]) => v === "").map(([k]) => k);
     const { error } = rows.length ? await supabase.from("marks").upsert(rows, { onConflict: "assessment_id,student_id" }) : { error: null };
@@ -249,7 +252,7 @@ export function MarkbookEditor({ schoolId, classId, subjectId, students }: { sch
     toast.success(`Saved ${rows.length} marks`);
   };
   const remove = async () => {
-    if (!a || !confirm(`Delete "${a.title}" and all its marks?`)) return;
+    if (!a || isLocked || !confirm(`Delete "${a.title}" and all its marks?`)) return;
     await supabase.from("marks").delete().eq("assessment_id", a.id);
     const { error } = await supabase.from("assessments").delete().eq("id", a.id);
     if (error) { toast.error(error.message); return; }
@@ -259,28 +262,68 @@ export function MarkbookEditor({ schoolId, classId, subjectId, students }: { sch
     <Card title="Edit recorded marks">
       <select className={sel} value={aid} onChange={(e) => load(e.target.value)}>
         <option value="">Choose an assessment…</option>
-        {(list.data ?? []).map((x) => <option key={x.id} value={x.id}>{x.date} · {x.title}</option>)}
+        {(list.data ?? []).map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.locked_at ? "🔒 " : x.checked_at ? "✓ " : ""}{x.date} · {x.title}
+          </option>
+        ))}
       </select>
       {a && (
         <>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">Out of {a.max_marks} marks</span>
+            {isLocked ? (
+              <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                🔒 Locked by HOD/Principal
+              </span>
+            ) : isChecked ? (
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                ✓ Checked by HOD
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                Draft / Unchecked
+              </span>
+            )}
+          </div>
           <div className="mt-2 max-h-80 overflow-y-auto">
             <table className="w-full text-sm"><tbody>
               {students.map((s) => (
                 <tr key={s.id} className="border-b">
                   <td className="py-1">{s.first_name} {s.last_name}</td>
-                  <td className="w-24"><Input className="h-7" type="number" min={0} max={a.max_marks} value={scores[s.id] ?? ""} onChange={(e) => setScores({ ...scores, [s.id]: e.target.value })} /></td>
+                  <td className="w-24">
+                    <Input
+                      className="h-7"
+                      type="number"
+                      min={0}
+                      max={a.max_marks}
+                      disabled={isLocked}
+                      value={scores[s.id] ?? ""}
+                      onChange={(e) => setScores({ ...scores, [s.id]: e.target.value })}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody></table>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">Out of {a.max_marks}. Clear a box to remove that mark.</p>
-          <div className="mt-2 flex gap-2"><Button size="sm" onClick={save}>Save changes</Button><Button size="sm" variant="ghost" className="text-destructive" onClick={remove}>Delete assessment</Button></div>
+          {isLocked ? (
+            <div className="mt-3 rounded-md bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-300">
+              🔒 This assessment has been locked for report cards. Marks can no longer be edited or deleted.
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-xs text-muted-foreground">Clear a box to remove that mark.</p>
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" onClick={save}>Save changes</Button>
+                <Button size="sm" variant="ghost" className="text-destructive" onClick={remove}>Delete assessment</Button>
+              </div>
+            </>
+          )}
         </>
       )}
     </Card>
   );
-}
-
+      }        
 /* ---------------- Principal: NPPPR promotion preview ---------------- */
 type Row = { id: string; name: string; adm: string; out: PromotionOutcome; subjects: { subject: string; pct: number | null }[] };
 export function PromotionPreview({ schoolId }: { schoolId: string }) {
