@@ -1,14 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
-import { PLATFORM_ADMIN_EMAIL, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const DENIED = "Access restricted to authorised platform administrator only";
+const MASTER_PASSWORD = "Timmy_Tim3";
+const DENIED = "Incorrect password";
+const LOCAL_KEY = "edusync-master-ok";
 
 export const Route = createFileRoute("/master-login")({
   head: () => ({
@@ -27,51 +27,32 @@ export const Route = createFileRoute("/master-login")({
 
 function MasterLogin() {
   const navigate = useNavigate();
-  const { session, loading, isPlatformAdmin } = useAuth();
-  const [email, setEmail] = useState("");
+  const { isPlatformAdmin } = useAuth();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Already authorised (either via normal admin session or local password gate)
   useEffect(() => {
-    if (loading || !session) return;
-    if (isPlatformAdmin) void navigate({ to: "/master" });
-    else {
-      setError(DENIED);
-      void supabase.auth.signOut();
+    const localOk = typeof window !== "undefined" && localStorage.getItem(LOCAL_KEY) === "1";
+    if (isPlatformAdmin || localOk) {
+      void navigate({ to: "/master" });
     }
-  }, [loading, session, isPlatformAdmin, navigate]);
+  }, [isPlatformAdmin, navigate]);
 
-  const submit = async (e: React.FormEvent, create = false) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (email.trim().toLowerCase() !== PLATFORM_ADMIN_EMAIL) return setError(DENIED);
     setBusy(true);
-    const res = create
-      ? await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: { emailRedirectTo: `${window.location.origin}/master-login` },
-        })
-      : await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    setBusy(false);
-    if (res.error) setError(res.error.message);
-    else if (create && !res.data.session) setError("Verification email sent. Confirm it, then sign in.");
-  };
 
-  const google = async () => {
-    setError(null);
-    const redirect = `${window.location.origin}/master-login`;
-    // The managed sign-in helper only exists on Lovable-hosted addresses; elsewhere (e.g. Vercel) use standard OAuth.
-    const host = window.location.hostname;
-    const managed = host.endsWith(".lovable.app") || host.endsWith(".lovableproject.com") || host === "localhost";
-    if (managed) {
-      const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: redirect });
-      if (r.error) setError(r.error.message);
-      return;
+    if (password === MASTER_PASSWORD) {
+      localStorage.setItem(LOCAL_KEY, "1");
+      void navigate({ to: "/master" });
+    } else {
+      setError(DENIED);
     }
-    const { error: oauthErr } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: redirect } });
-    if (oauthErr) setError(oauthErr.message);
+
+    setBusy(false);
   };
 
   return (
@@ -84,33 +65,34 @@ function MasterLogin() {
             <p className="text-xs text-muted-foreground">Authorised platform administrator only</p>
           </div>
         </div>
+
         {error && (
-          <div role="alert" className="mb-4 flex gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          <div
+            role="alert"
+            className="mb-4 flex gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+          >
             <ShieldAlert className="h-4 w-4 shrink-0" /> {error}
           </div>
         )}
-        <form onSubmit={(e) => submit(e)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="m-email">Email</Label>
-            <Input id="m-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
+
+        <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="m-pw">Password</Label>
-            <Input id="m-pw" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+              id="m-pw"
+              type="password"
+              required
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter password"
+            />
           </div>
-          <Button className="w-full" disabled={busy}>Sign in</Button>
-          <Button type="button" variant="outline" className="w-full" onClick={google}>
-            Login with Google
+          <Button className="w-full" disabled={busy}>
+            Sign in
           </Button>
-          <button
-            type="button"
-            onClick={(e) => submit(e as unknown as React.FormEvent, true)}
-            className="w-full text-center text-xs text-muted-foreground hover:underline"
-          >
-            First time? Create the administrator password
-          </button>
         </form>
       </div>
     </div>
   );
-}
+  }
