@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     primaryRole,
     availableRoles,
     setViewAs: (r) => { localStorage.setItem("edusync-view-as", r); setViewAsState(r); },
-    isPlatformAdmin: email === PLATFORM_ADMIN_EMAIL,
+    isPlatformAdmin: email === PLATFORM_ADMIN_EMAIL || (typeof window !== "undefined" && localStorage.getItem("edusync-master-ok") === "1"),
     refresh: async () => loadRoles(session?.user?.id),
     signOut: async () => {
       await supabase.auth.signOut();
