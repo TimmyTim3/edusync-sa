@@ -176,6 +176,13 @@
       "when": 1793611994940,
       "tag": "0024_bundle_g_mark_governance",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793687209167,
+      "tag": "0025_subject_planning_bundle_h",
+      "breakpoints": true
     }
   ]
 }
