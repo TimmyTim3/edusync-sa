@@ -667,6 +667,70 @@ export type Database = {
           },
         ]
       }
+      learner_subject_allocations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          ended_on: string | null
+          ended_reason: string | null
+          id: string
+          notes: string | null
+          school_id: string
+          status: string
+          student_id: string
+          subject_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from: string
+          ended_on?: string | null
+          ended_reason?: string | null
+          id?: string
+          notes?: string | null
+          school_id: string
+          status?: string
+          student_id: string
+          subject_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          ended_on?: string | null
+          ended_reason?: string | null
+          id?: string
+          notes?: string | null
+          school_id?: string
+          status?: string
+          student_id?: string
+          subject_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learner_subject_allocations_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learner_subject_allocations_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learner_subject_allocations_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       learner_transfers: {
         Row: {
           clearance: Json
@@ -1446,6 +1510,121 @@ export type Database = {
           },
           {
             foreignKeyName: "students_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subject_changes: {
+        Row: {
+          consent_url: string | null
+          created_at: string
+          created_by: string | null
+          decided_at: string | null
+          decided_by: string | null
+          effective_date: string
+          from_subject_id: string | null
+          id: string
+          reason: string
+          school_id: string
+          status: string
+          student_id: string
+          to_subject_id: string
+        }
+        Insert: {
+          consent_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          effective_date: string
+          from_subject_id?: string | null
+          id?: string
+          reason: string
+          school_id: string
+          status?: string
+          student_id: string
+          to_subject_id: string
+        }
+        Update: {
+          consent_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          effective_date?: string
+          from_subject_id?: string | null
+          id?: string
+          reason?: string
+          school_id?: string
+          status?: string
+          student_id?: string
+          to_subject_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subject_changes_from_subject_id_fkey"
+            columns: ["from_subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subject_changes_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subject_changes_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subject_changes_to_subject_id_fkey"
+            columns: ["to_subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subject_streams: {
+        Row: {
+          created_at: string
+          grades: string
+          id: string
+          name: string
+          notes: string | null
+          school_id: string
+          subject_ids: string[]
+        }
+        Insert: {
+          created_at?: string
+          grades: string
+          id?: string
+          name: string
+          notes?: string | null
+          school_id: string
+          subject_ids?: string[]
+        }
+        Update: {
+          created_at?: string
+          grades?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          school_id?: string
+          subject_ids?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subject_streams_school_id_fkey"
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"
