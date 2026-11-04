@@ -14,4 +14,6 @@
 - [x] Bundle E: Front Office / clerk portal (lookup + guardian contacts, absence calls, gate register, parent linking); clerks added via staff upload with role 'Clerk'/'Receptionist'.
 - [x] 10-year guardrail: composite indexes added; Principal overview loads in parallel.
 - [x] Subjects: CAPS starter packs, custom subject manager (archive/delete), SA-SAMS educator allocation upload.
-- [ ] Gap audit follow-ups: HOD mark moderation/locking, subject changes per learner (electives), textbook loans, medical/exam accommodations, SMS/WhatsApp sending provider, term/academic-year setup screen.
+- [x] Gap audit follow-ups: HOD mark moderation/locking, subject changes per learner (electives), textbook loans, medical/exam accommodations, SMS/WhatsApp sending provider, term/academic-year setup screen.
+- [x] Complete database pre-build (migration 0026): textbook_titles/copies/issues, learner_accommodations, notification_templates, outbound_messages, attendance_lock_settings — grants, RLS, indexes. Backend now export-ready; remaining bundles build screens only.
+- [x] Bundle I/Governance screen fixes: Governance.tsx Empty message props and grade-level badge lookups corrected.

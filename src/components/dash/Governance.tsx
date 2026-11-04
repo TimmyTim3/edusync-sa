@@ -98,7 +98,7 @@ export function YearTermManager({ schoolId }: { schoolId: string }) {
       toast.error("Fill in term name and date range");
       return;
     }
-    const { error } = await supabase.from("terms").insert({ academic_year_id: active.id, ...t, is_current: (terms.data?.length ?? 0) === 0 });
+    const { error } = await supabase.from("terms").insert({ school_id: schoolId, academic_year_id: active.id, ...t, is_current: (terms.data?.length ?? 0) === 0 });
     if (error) { toast.error(error.message); return; }
     toast.success(`${t.name} added to ${active.name}`);
     setT({ name: "", start_date: "", end_date: "" });
@@ -180,7 +180,7 @@ export function YearTermManager({ schoolId }: { schoolId: string }) {
                   <Button size="sm" variant="outline" onClick={() => void saveTerm(row.id)}>Save dates</Button>
                 </div>
               ))}
-              {terms.data?.length === 0 && <Empty label="No terms recorded for this academic year yet." />}
+              {terms.data?.length === 0 && <Empty text="No terms recorded for this academic year yet." />}
             </div>
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2">
@@ -264,7 +264,7 @@ export function HodMarkReview({ schoolId }: { schoolId: string }) {
 
       {!classId && (
         <div className="mt-4">
-          <Empty label="Choose a class above to inspect its assessment mark sheets." />
+          <Empty text="Choose a class above to inspect its assessment mark sheets." />
         </div>
       )}
 
@@ -311,7 +311,7 @@ export function HodMarkReview({ schoolId }: { schoolId: string }) {
             );
           })}
           {rows.length === 0 && (
-            <Empty label="No assessments created for this class yet." />
+            <Empty text="No assessments created for this class yet." />
           )}
         </div>
       )}
@@ -567,7 +567,7 @@ function AssessmentInspectionSheet({
             const count = levelCounts[lvl] || 0;
             const pct = overview.enteredCount > 0 ? Math.round((count / overview.enteredCount) * 100) : 0;
             return (
-              <div key={lvl} className={`rounded border p-1.5 text-center ${LEVEL_DESCRIPTIONS[lvl].badge}`}>
+              <div key={lvl} className={`rounded border p-1.5 text-center ${LEVEL_DESCRIPTIONS[lvl]?.badge ?? ""}`}>
                 <div className="text-[11px] font-bold">L{lvl}</div>
                 <div className="text-sm font-extrabold">{count}</div>
                 <div className="text-[9px] opacity-80">{pct}%</div>
@@ -635,7 +635,7 @@ function AssessmentInspectionSheet({
                     </td>
                     <td className="py-2 px-2.5 text-center">
                       {lvl !== null ? (
-                        <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium border ${LEVEL_DESCRIPTIONS[lvl].badge}`}>
+                        <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium border ${LEVEL_DESCRIPTIONS[lvl]?.badge ?? ""}`}>
                           Level {lvl}
                         </span>
                       ) : (

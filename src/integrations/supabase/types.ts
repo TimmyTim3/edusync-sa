@@ -186,6 +186,47 @@ export type Database = {
           },
         ]
       }
+      attendance_lock_settings: {
+        Row: {
+          auto_lock_after_submission: boolean
+          id: string
+          lock_past_days: number
+          principal_override_required: boolean
+          register_cutoff_time: string
+          school_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          auto_lock_after_submission?: boolean
+          id?: string
+          lock_past_days?: number
+          principal_override_required?: boolean
+          register_cutoff_time?: string
+          school_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          auto_lock_after_submission?: boolean
+          id?: string
+          lock_past_days?: number
+          principal_override_required?: boolean
+          register_cutoff_time?: string
+          school_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_lock_settings_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: true
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance_records: {
         Row: {
           class_id: string | null
@@ -667,6 +708,66 @@ export type Database = {
           },
         ]
       }
+      learner_accommodations: {
+        Row: {
+          accommodation: string
+          attachment_url: string | null
+          created_at: string
+          created_by: string | null
+          dbe_reference: string | null
+          id: string
+          medical_notes: string | null
+          school_id: string
+          status: string
+          student_id: string
+          valid_from: string
+          valid_to: string | null
+        }
+        Insert: {
+          accommodation: string
+          attachment_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          dbe_reference?: string | null
+          id?: string
+          medical_notes?: string | null
+          school_id: string
+          status?: string
+          student_id: string
+          valid_from: string
+          valid_to?: string | null
+        }
+        Update: {
+          accommodation?: string
+          attachment_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          dbe_reference?: string | null
+          id?: string
+          medical_notes?: string | null
+          school_id?: string
+          status?: string
+          student_id?: string
+          valid_from?: string
+          valid_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learner_accommodations_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learner_accommodations_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       learner_subject_allocations: {
         Row: {
           created_at: string
@@ -965,6 +1066,53 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_templates: {
+        Row: {
+          body: string
+          channel: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          purpose: string
+          school_id: string
+          variables: Json
+        }
+        Insert: {
+          body: string
+          channel: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          purpose: string
+          school_id: string
+          variables?: Json
+        }
+        Update: {
+          body?: string
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          purpose?: string
+          school_id?: string
+          variables?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_templates_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -1015,6 +1163,94 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outbound_messages: {
+        Row: {
+          body: string
+          channel: string
+          created_at: string
+          created_by: string | null
+          delivered_at: string | null
+          id: string
+          last_error: string | null
+          provider_message_id: string | null
+          recipient_email: string | null
+          recipient_name: string | null
+          recipient_phone: string | null
+          retry_count: number
+          scheduled_at: string
+          school_id: string
+          sent_at: string | null
+          status: string
+          student_id: string | null
+          template_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          body: string
+          channel: string
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string | null
+          id?: string
+          last_error?: string | null
+          provider_message_id?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          retry_count?: number
+          scheduled_at?: string
+          school_id: string
+          sent_at?: string | null
+          status?: string
+          student_id?: string | null
+          template_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          body?: string
+          channel?: string
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string | null
+          id?: string
+          last_error?: string | null
+          provider_message_id?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          retry_count?: number
+          scheduled_at?: string
+          school_id?: string
+          sent_at?: string | null
+          status?: string
+          student_id?: string | null
+          template_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outbound_messages_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_messages_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outbound_messages_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "notification_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -1747,6 +1983,185 @@ export type Database = {
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      textbook_copies: {
+        Row: {
+          barcode: string
+          condition: string
+          created_at: string
+          id: string
+          school_id: string
+          status: string
+          title_id: string
+        }
+        Insert: {
+          barcode: string
+          condition?: string
+          created_at?: string
+          id?: string
+          school_id: string
+          status?: string
+          title_id: string
+        }
+        Update: {
+          barcode?: string
+          condition?: string
+          created_at?: string
+          id?: string
+          school_id?: string
+          status?: string
+          title_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "textbook_copies_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "textbook_copies_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "textbook_titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      textbook_issues: {
+        Row: {
+          copy_id: string
+          created_at: string
+          created_by: string | null
+          due_on: string
+          fee: number
+          fee_paid: boolean
+          id: string
+          issued_on: string
+          notes: string | null
+          return_condition: string | null
+          returned_on: string | null
+          school_id: string
+          student_id: string | null
+          teacher_profile_id: string | null
+        }
+        Insert: {
+          copy_id: string
+          created_at?: string
+          created_by?: string | null
+          due_on: string
+          fee?: number
+          fee_paid?: boolean
+          id?: string
+          issued_on: string
+          notes?: string | null
+          return_condition?: string | null
+          returned_on?: string | null
+          school_id: string
+          student_id?: string | null
+          teacher_profile_id?: string | null
+        }
+        Update: {
+          copy_id?: string
+          created_at?: string
+          created_by?: string | null
+          due_on?: string
+          fee?: number
+          fee_paid?: boolean
+          id?: string
+          issued_on?: string
+          notes?: string | null
+          return_condition?: string | null
+          returned_on?: string | null
+          school_id?: string
+          student_id?: string | null
+          teacher_profile_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "textbook_issues_copy_id_fkey"
+            columns: ["copy_id"]
+            isOneToOne: false
+            referencedRelation: "textbook_copies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "textbook_issues_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "textbook_issues_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "textbook_issues_teacher_profile_id_fkey"
+            columns: ["teacher_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      textbook_titles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          grade: string | null
+          id: string
+          isbn: string | null
+          publisher: string | null
+          school_id: string
+          subject_id: string | null
+          title: string
+          total_copies: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          grade?: string | null
+          id?: string
+          isbn?: string | null
+          publisher?: string | null
+          school_id: string
+          subject_id?: string | null
+          title: string
+          total_copies?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          grade?: string | null
+          id?: string
+          isbn?: string | null
+          publisher?: string | null
+          school_id?: string
+          subject_id?: string | null
+          title?: string
+          total_copies?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "textbook_titles_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "textbook_titles_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
             referencedColumns: ["id"]
           },
         ]

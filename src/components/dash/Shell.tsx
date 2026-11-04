@@ -34,10 +34,11 @@ export function Shell({ title, subtitle, lastUpdate, children }: { title: string
   );
 }
 
-export function Card({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
+export function Card({ title, description, children, className = "" }: { title?: string; description?: string; children: ReactNode; className?: string }) {
   return (
     <section className={`rounded-2xl border bg-card p-5 shadow-sm ${className}`}>
-      {title && <h2 className="mb-3 font-display text-base font-semibold">{title}</h2>}
+      {title && <h2 className="mb-1 font-display text-base font-semibold">{title}</h2>}
+      {description && <p className="mb-3 text-xs text-muted-foreground">{description}</p>}
       {children}
     </section>
   );

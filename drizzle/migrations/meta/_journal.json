@@ -183,6 +183,13 @@
       "when": 1793687209167,
       "tag": "0025_subject_planning_bundle_h",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793795507211,
+      "tag": "0026_complete_remaining_bundles_schema",
+      "breakpoints": true
     }
   ]
 }
