@@ -42,8 +42,8 @@ export function SubjectStreamsManager({ schoolId }: { schoolId: string }) {
   });
 
   const handleCreate = async () => {
-    if (!name.trim()) return toast.error("Please enter a stream package name");
-    if (selectedSubjs.length === 0) return toast.error("Select at least one subject for this stream");
+    if (!name.trim()) { toast.error("Please enter a stream package name"); return; }
+    if (selectedSubjs.length === 0) { toast.error("Select at least one subject for this stream"); return; }
     setSubmitting(true);
     try {
       const { error } = await supabase.from("subject_streams").insert({
@@ -79,7 +79,7 @@ export function SubjectStreamsManager({ schoolId }: { schoolId: string }) {
   };
 
   return (
-    <Card title="FET Subject Streams" subtitle="Predefined elective packages (e.g., Pure Sciences, Commerce, Humanities)">
+    <Card title="FET Subject Streams" description="Predefined elective packages (e.g., Pure Sciences, Commerce, Humanities)">
       <div className="space-y-4">
         <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
           <p className="text-xs font-semibold text-foreground">Create New Stream Package</p>
@@ -161,21 +161,21 @@ export function LearnerSubjectAllocation({ schoolId }: { schoolId: string }) {
     queryKey: ["learners-for-class", selectedClassId],
     enabled: !!selectedClassId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("students").select("id, first_name, last_name, admission_number").eq("class_id", selectedClassId).eq("status", "ACTIVE").order("last_name");
+      const { data, error } = await supabase.from("students").select("id, first_name, last_name, admission_no").eq("class_id", selectedClassId).is("deleted_at", null).order("last_name");
       if (error) throw error;
       return data ?? [];
     },
   });
 
   const handleBulkEnroll = async () => {
-    if (!selectedClassId) return toast.error("Please pick a class");
-    if (!selectedSubjectId) return toast.error("Please pick a subject");
+    if (!selectedClassId) { toast.error("Please pick a class"); return; }
+    if (!selectedSubjectId) { toast.error("Please pick a subject"); return; }
     const list = learners.data ?? [];
-    if (list.length === 0) return toast.error("No active learners in this class");
+    if (list.length === 0) { toast.error("No active learners in this class"); return; }
 
     setSaving(true);
     try {
-      const todayDate = new Date().toISOString().split("T")[0];
+      const todayDate = new Date().toISOString().slice(0, 10);
       const inserts = list.map((l) => ({
         school_id: schoolId,
         student_id: l.id,
@@ -200,7 +200,7 @@ export function LearnerSubjectAllocation({ schoolId }: { schoolId: string }) {
   };
 
   return (
-    <Card title="Class Subject Allocation" subtitle="Bulk-enroll learners of a class into specific elective subjects">
+    <Card title="Class Subject Allocation" description="Bulk-enroll learners of a class into specific elective subjects">
       <div className="space-y-4">
         <div className="grid gap-2 sm:grid-cols-2">
           <div>
@@ -262,7 +262,7 @@ export function SubjectChangeRequests({ schoolId }: { schoolId: string }) {
         .from("subject_changes")
         .select(`
           id, student_id, from_subject_id, to_subject_id, reason, status, effective_date, consent_url, created_at,
-          students:student_id (id, first_name, last_name, admission_number),
+          students:student_id (id, first_name, last_name, admission_no),
           from_subject:from_subject_id (id, name),
           to_subject:to_subject_id (id, name)
         `)
@@ -292,13 +292,13 @@ export function SubjectChangeRequests({ schoolId }: { schoolId: string }) {
   };
 
   return (
-    <Card title="Subject Change Audit Ledger" subtitle="Formal record of elective changes preserving historical marks">
+    <Card title="Subject Change Audit Ledger" description="Formal record of elective changes preserving historical marks">
       <div className="space-y-2.5">
         {changes.data?.map((ch: any) => (
           <div key={ch.id} className="rounded-lg border bg-card p-3 text-xs space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-foreground">
-                {ch.students?.last_name}, {ch.students?.first_name} ({ch.students?.admission_number})
+                {ch.students?.last_name}, {ch.students?.first_name} ({ch.students?.admission_no})
               </span>
               <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
                 ch.status === "approved" ? "bg-emerald-100 text-emerald-800" :

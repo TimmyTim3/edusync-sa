@@ -59,7 +59,7 @@ export function AttendanceLockSettingsCard({ schoolId }: { schoolId: string }) {
   };
 
   return (
-    <Card title="Register Lockdown Policy" subtitle="Enforce official DBE register cutoffs & teacher edit restrictions">
+    <Card title="Register Lockdown Policy" description="Enforce official DBE register cutoffs & teacher edit restrictions">
       <div className="space-y-3.5 text-xs">
         <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
           <div className="flex items-center justify-between">
@@ -122,9 +122,9 @@ export function PrincipalOverrideCard({ schoolId }: { schoolId: string }) {
       const q = searchTerm.trim();
       const { data, error } = await supabase
         .from("students")
-        .select("id, first_name, last_name, admission_number, class_id, classes:class_id(name, grade)")
+        .select("id, first_name, last_name, admission_no, class_id, classes:class_id(name, grade)")
         .eq("school_id", schoolId)
-        .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,admission_number.ilike.%${q}%`)
+        .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,admission_no.ilike.%${q}%`)
         .limit(6);
       if (error) throw error;
       return (data as any[]) ?? [];
@@ -138,8 +138,8 @@ export function PrincipalOverrideCard({ schoolId }: { schoolId: string }) {
       const { data, error } = await supabase
         .from("attendance_records")
         .select("id, status, note, marked_by, created_at")
-        .eq("student_id", targetStudent.id)
-        .eq("date", date)
+        .eq("student_id", targetStudent!.id)
+        .eq("date", date ?? "")
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -155,9 +155,9 @@ export function PrincipalOverrideCard({ schoolId }: { schoolId: string }) {
   ];
 
   const handleApplyOverride = async () => {
-    if (!targetStudent) return toast.error("Please search and select a learner");
-    if (!reason.trim()) return toast.error("Justification note is mandatory for DBE audit trail");
-    if (!user?.id) return toast.error("User session missing");
+    if (!targetStudent) { toast.error("Please search and select a learner"); return; }
+    if (!reason.trim()) { toast.error("Justification note is mandatory for DBE audit trail"); return; }
+    if (!user?.id) { toast.error("User session missing"); return; }
 
     setSubmitting(true);
     try {
@@ -192,7 +192,7 @@ export function PrincipalOverrideCard({ schoolId }: { schoolId: string }) {
   };
 
   return (
-    <Card title="Authorize Attendance Override" subtitle="Principal / Deputy sign-off to retrospectively amend marked register">
+    <Card title="Authorize Attendance Override" description="Principal / Deputy sign-off to retrospectively amend marked register">
       <div className="space-y-3.5 text-xs">
         <div>
           <label className="text-[11px] font-medium text-muted-foreground">Find Learner (Name or Admission No):</label>
@@ -218,7 +218,7 @@ export function PrincipalOverrideCard({ schoolId }: { schoolId: string }) {
                   className="w-full p-2 text-left hover:bg-muted text-xs flex justify-between"
                 >
                   <span className="font-semibold text-foreground">{st.last_name}, {st.first_name}</span>
-                  <span className="text-muted-foreground">Adm: {st.admission_number} • Gr {st.classes?.grade}-{st.classes?.name}</span>
+                  <span className="text-muted-foreground">Adm: {st.admission_no} • Gr {st.classes?.grade}-{st.classes?.name}</span>
                 </button>
               ))}
             </div>
@@ -228,7 +228,7 @@ export function PrincipalOverrideCard({ schoolId }: { schoolId: string }) {
         {targetStudent && (
           <div className="rounded-lg border bg-primary/5 p-2.5 flex items-center justify-between">
             <div>
-              <p className="font-semibold text-foreground">{targetStudent.last_name}, {targetStudent.first_name} ({targetStudent.admission_number})</p>
+              <p className="font-semibold text-foreground">{targetStudent.last_name}, {targetStudent.first_name} ({targetStudent.admission_no})</p>
               <p className="text-[11px] text-muted-foreground">
                 Current record for {date}: <span className="font-semibold text-foreground">{existingRecord.data?.status || "Unmarked / Not recorded"}</span>
               </p>
@@ -304,7 +304,7 @@ export function AuditedOverrideLedger({ schoolId }: { schoolId: string }) {
   });
 
   return (
-    <Card title="Attendance Override Audit Trail" subtitle="Immutable ledger of all Principal / SGB authorized register edits">
+    <Card title="Attendance Override Audit Trail" description="Immutable ledger of all Principal / SGB authorized register edits">
       <div className="space-y-2 text-xs">
         {ledger.data?.map((entry) => {
           const d = (entry.details as any) || {};
