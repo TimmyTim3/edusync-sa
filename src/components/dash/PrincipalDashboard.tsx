@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SubjectPlanning } from "./SubjectPlanning";
 import { AttendanceLockdown } from "./AttendanceLockdown";
+import { TextbookInventory } from "./TextbookInventory";
 
 export function PrincipalDashboard() {
   const { user, schoolId } = useAuth();
@@ -119,6 +120,8 @@ export function PrincipalDashboard() {
        <HodMarkReview schoolId={schoolId} />
        <SubjectPlanning schoolId={schoolId} />
        <AttendanceLockdown schoolId={schoolId} />
+       <TextbookInventory schoolId={schoolId} />
+       
        <StaffIngest schoolId={schoolId} />
        
           <ClassTeacherAssign schoolId={schoolId} />
