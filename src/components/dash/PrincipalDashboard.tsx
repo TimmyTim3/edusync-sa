@@ -117,19 +117,16 @@ export function PrincipalDashboard() {
       ) : tab === "gate" && schoolId ? (
         <div className="grid gap-4 lg:grid-cols-2"><GateRegister schoolId={schoolId} /><TruancyAlerts schoolId={schoolId} /></div>
       ) : tab === "staff" && schoolId ? (
-     <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2 min-w-0">
        <YearTermManager schoolId={schoolId} />
        <HodMarkReview schoolId={schoolId} />
        <SubjectPlanning schoolId={schoolId} />
        <AttendanceLockdown schoolId={schoolId} />
        <TextbookInventory schoolId={schoolId} />
-              <TextbookInventory schoolId={schoolId} />
        <LearnerAccommodations schoolId={schoolId} />
-              <LearnerAccommodations schoolId={schoolId} />
        <OutboundMessaging schoolId={schoolId} />
-       
        <StaffIngest schoolId={schoolId} />
-       
+            
           <ClassTeacherAssign schoolId={schoolId} />
           <CurriculumManager schoolId={schoolId} />
           <SubjectAllocation schoolId={schoolId} />
