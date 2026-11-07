@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { SubjectPlanning } from "./SubjectPlanning";
 import { AttendanceLockdown } from "./AttendanceLockdown";
 import { TextbookInventory } from "./TextbookInventory";
+import { LearnerAccommodations } from "./LearnerAccommodations";
 
 export function PrincipalDashboard() {
   const { user, schoolId } = useAuth();
@@ -121,6 +122,8 @@ export function PrincipalDashboard() {
        <SubjectPlanning schoolId={schoolId} />
        <AttendanceLockdown schoolId={schoolId} />
        <TextbookInventory schoolId={schoolId} />
+              <TextbookInventory schoolId={schoolId} />
+       <LearnerAccommodations schoolId={schoolId} />
        
        <StaffIngest schoolId={schoolId} />
        
