@@ -217,10 +217,10 @@ export function OutboundMessaging({ schoolId }: Props) {
       description="Automated parent & guardian messaging hub. Send official DBE notices, absenteeism alerts, SGB summons, and fee reminders via SMS, WhatsApp, and Email."
     >
       <div className="space-y-6">
-        <div className="flex border-b border-border text-xs font-medium gap-4">
+                <div className="flex border-b border-border text-xs font-medium gap-2 sm:gap-4 overflow-x-auto pb-1">
           <button
             onClick={() => setTab("dispatch")}
-            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors ${
+            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               tab === "dispatch" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
@@ -228,7 +228,7 @@ export function OutboundMessaging({ schoolId }: Props) {
           </button>
           <button
             onClick={() => setTab("queue")}
-            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors ${
+            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               tab === "queue" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
@@ -236,13 +236,14 @@ export function OutboundMessaging({ schoolId }: Props) {
           </button>
           <button
             onClick={() => setTab("templates")}
-            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors ${
+            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               tab === "templates" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
             <MessageSquare className="h-4 w-4" /> Pre-Approved Templates
           </button>
         </div>
+        
                   {tab === "dispatch" && (
           <form onSubmit={handleDispatch} className="p-4 border rounded-xl bg-card space-y-4 max-w-2xl">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
