@@ -22,6 +22,7 @@ import { AttendanceLockdown } from "./AttendanceLockdown";
 import { TextbookInventory } from "./TextbookInventory";
 import { LearnerAccommodations } from "./LearnerAccommodations";
 import { OutboundMessaging } from "./OutboundMessaging";
+import { SgbHearingDocket } from "./SgbHearingDocket";
 
 export function PrincipalDashboard() {
   const { user, schoolId } = useAuth();
@@ -135,9 +136,13 @@ export function PrincipalDashboard() {
           <PromotionPreview schoolId={schoolId} />
           <TransferClearance schoolId={schoolId} />
         </div>
-      ) : tab === "discipline" ? (
-        <DisciplinaryReports schoolId={schoolId} />
+            ) : tab === "discipline" ? (
+        <div className="space-y-6">
+          <DisciplinaryReports schoolId={schoolId} />
+          {schoolId && <SgbHearingDocket schoolId={schoolId} />}
+        </div>
       ) : glance ? (
+      
         <ClassGlance classId={glance.id} className={glance.name} onClose={() => setGlance(null)} />
       ) : (
       <>
