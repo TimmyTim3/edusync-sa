@@ -237,11 +237,10 @@ export function TextbookInventory({ schoolId }: Props) {
       title="Textbook & LTSM Inventory Manager"
       description="Official CAPS Learning & Teaching Support Material tracker. Catalog books, generate barcode batches, issue to learners with live camera scan, and track year-end returns."
     >
-      <div className="space-y-6">
-        <div className="flex border-b border-border text-xs font-medium gap-4">
+              <div className="flex border-b border-border text-xs font-medium gap-2 sm:gap-4 overflow-x-auto pb-1">
           <button
             onClick={() => setActiveTab("catalog")}
-            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors ${
+            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === "catalog" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
@@ -249,7 +248,7 @@ export function TextbookInventory({ schoolId }: Props) {
           </button>
           <button
             onClick={() => setActiveTab("issue")}
-            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors ${
+            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === "issue" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
@@ -257,13 +256,14 @@ export function TextbookInventory({ schoolId }: Props) {
           </button>
           <button
             onClick={() => setActiveTab("returns")}
-            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors ${
+            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               activeTab === "returns" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
             <RotateCcw className="h-4 w-4" /> Returns & Lost Books
           </button>
         </div>
+      
                 {activeTab === "catalog" && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
