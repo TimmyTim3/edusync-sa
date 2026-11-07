@@ -8,8 +8,8 @@ import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 export function Shell({ title, subtitle, lastUpdate, children }: { title: string; subtitle?: string; lastUpdate: Date | null; children: ReactNode }) {
   const { user, signOut, isPlatformAdmin } = useAuth();
   return (
-    <div className="min-h-screen bg-muted/30">
-      <header className="sticky top-0 z-10 border-b bg-card/90 backdrop-blur">
+    <div className="min-h-screen bg-muted/30 w-full overflow-x-clip">
+      <header className="sticky top-0 z-10 w-full border-b bg-card/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
           <Link to="/" className="flex items-center gap-2 font-display font-semibold">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground"><Users className="h-4 w-4" /></span>
@@ -25,10 +25,10 @@ export function Shell({ title, subtitle, lastUpdate, children }: { title: string
           <Button size="icon" variant="ghost" onClick={() => void signOut()} aria-label="Sign out"><LogOut className="h-4 w-4" /></Button>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main className="mx-auto max-w-7xl px-4 py-6 w-full min-w-0">
         <h1 className="font-display text-2xl font-semibold">{title}</h1>
         {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
-        <div className="mt-6">{children}</div>
+        <div className="mt-6 w-full min-w-0">{children}</div>
       </main>
     </div>
   );
@@ -36,7 +36,7 @@ export function Shell({ title, subtitle, lastUpdate, children }: { title: string
 
 export function Card({ title, description, children, className = "" }: { title?: string; description?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-2xl border bg-card p-5 shadow-sm ${className}`}>
+    <section className={`rounded-2xl border bg-card p-4 sm:p-5 shadow-sm min-w-0 overflow-hidden ${className}`}>
       {title && <h2 className="mb-1 font-display text-base font-semibold">{title}</h2>}
       {description && <p className="mb-3 text-xs text-muted-foreground">{description}</p>}
       {children}
@@ -46,7 +46,7 @@ export function Card({ title, description, children, className = "" }: { title?:
 
 export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
-    <div className="rounded-2xl border bg-card p-4 shadow-sm">
+    <div className="rounded-2xl border bg-card p-4 shadow-sm min-w-0">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-1 font-display text-2xl font-semibold">{value}</p>
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -59,3 +59,4 @@ export function Empty({ text }: { text: string }) {
 }
 
 export const today = () => new Date().toISOString().slice(0, 10);
+              
