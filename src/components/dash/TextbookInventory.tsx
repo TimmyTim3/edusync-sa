@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "./Shell";
 import { toast } from "sonner";
-import { BookOpen, Barcode, Plus, Search, RotateCcw } from "lucide-react";
+import { BookOpen, Barcode, Plus, Search, RotateCcw, Camera } from "lucide-react";
+import { BarcodeScannerModal } from "./BarcodeScannerModal";
 
 interface Props {
   schoolId: string;
@@ -12,6 +13,9 @@ interface Props {
 export function TextbookInventory({ schoolId }: Props) {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<"catalog" | "issue" | "returns">("catalog");
+
+  // Camera Scanner modal state
+  const [scannerTarget, setScannerTarget] = useState<"issue" | "return" | null>(null);
 
   const [showAddTitle, setShowAddTitle] = useState(false);
   const [titleName, setTitleName] = useState("");
@@ -231,7 +235,7 @@ export function TextbookInventory({ schoolId }: Props) {
   return (
     <Card
       title="Textbook & LTSM Inventory Manager"
-      description="Official CAPS Learning & Teaching Support Material tracker. Catalog books, generate barcode batches, issue to learners, and track year-end returns and replacement fees."
+      description="Official CAPS Learning & Teaching Support Material tracker. Catalog books, generate barcode batches, issue to learners with live camera scan, and track year-end returns."
     >
       <div className="space-y-6">
         <div className="flex border-b border-border text-xs font-medium gap-4">
@@ -260,8 +264,7 @@ export function TextbookInventory({ schoolId }: Props) {
             <RotateCcw className="h-4 w-4" /> Returns & Lost Books
           </button>
         </div>
-
-        {activeTab === "catalog" && (
+                {activeTab === "catalog" && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">{titles.data?.length || 0} Titles cataloged</span>
@@ -272,7 +275,8 @@ export function TextbookInventory({ schoolId }: Props) {
                 <Plus className="h-4 w-4" /> {showAddTitle ? "Close Form" : "Add Textbook Title"}
               </button>
             </div>
-                {showAddTitle && (
+
+            {showAddTitle && (
               <form onSubmit={handleCreateTitle} className="p-4 border rounded-xl bg-card space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -416,14 +420,23 @@ export function TextbookInventory({ schoolId }: Props) {
             <h4 className="text-sm font-semibold">Issue Textbook Copy to Learner</h4>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">Scan or Type Barcode</label>
-              <input
-                type="text"
-                placeholder="e.g. MATH-G10-001"
-                value={issueBarcode}
-                onChange={(e) => setIssueBarcode(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-sm bg-background font-mono"
-                required
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. MATH-G10-001"
+                  value={issueBarcode}
+                  onChange={(e) => setIssueBarcode(e.target.value)}
+                  className="flex-1 px-3 py-2 border rounded-lg text-sm bg-background font-mono"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setScannerTarget("issue")}
+                  className="px-3 py-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <Camera className="h-4 w-4" /> Scan Camera
+                </button>
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground block mb-1">Find Learner</label>
@@ -484,14 +497,23 @@ export function TextbookInventory({ schoolId }: Props) {
               <h4 className="text-sm font-semibold">Process Book Return or Report Lost</h4>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">Scan or Type Returned Barcode</label>
-                <input
-                  type="text"
-                  placeholder="e.g. MATH-G10-001"
-                  value={returnBarcode}
-                  onChange={(e) => setReturnBarcode(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm bg-background font-mono"
-                  required
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. MATH-G10-001"
+                    value={returnBarcode}
+                    onChange={(e) => setReturnBarcode(e.target.value)}
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm bg-background font-mono"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setScannerTarget("return")}
+                    className="px-3 py-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Camera className="h-4 w-4" /> Scan Camera
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -501,60 +523,57 @@ export function TextbookInventory({ schoolId }: Props) {
                     onChange={(e) => setReturnCondition(e.target.value as any)}
                     className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
                   >
-                    <option value="good">Good / Fair (No charge)</option>
-                    <option value="damaged">Damaged / Torn</option>
-                    <option value="lost">Lost / Missing</option>
+                    <option value="good">Good Condition</option>
+                    <option value="fair">Fair / Normal Wear</option>
+                    <option value="damaged">Damaged (Assessment Required)</option>
+                    <option value="lost">Lost / Unreturned</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Replacement Fee (R)</label>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Replacement Fee (ZAR)</label>
                   <input
                     type="number"
                     min={0}
                     value={replacementFee}
                     onChange={(e) => setReplacementFee(parseFloat(e.target.value) || 0)}
-                    placeholder="0"
-                    className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                    className="w-full px-3 py-2 border rounded-lg text-sm bg-background font-mono"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1">Notes / Inspector Comment</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-1">Return Notes (Optional)</label>
                 <input
                   type="text"
-                  placeholder="e.g. Water damage to back pages"
+                  placeholder="e.g. Water damage to cover; missing 2 pages"
                   value={returnNotes}
                   onChange={(e) => setReturnNotes(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
                 />
               </div>
               <button type="submit" disabled={processingReturn} className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
-                {processingReturn ? "Logging..." : "Process Return & Update Inventory"}
+                {processingReturn ? "Processing..." : "Complete Return"}
               </button>
             </form>
 
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold">Active & Recent Loans Audit Trail</h4>
-              <div className="border rounded-xl overflow-x-auto bg-card">
-                <table className="w-full text-xs">
+            <div className="border rounded-xl overflow-hidden bg-card">
+              <div className="p-3 border-b bg-muted/40 font-semibold text-xs">Recent Loan & Return History</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
                   <thead className="bg-muted/50 border-b">
                     <tr>
-                      <th className="p-2.5 text-left">Barcode</th>
-                      <th className="p-2.5 text-left">Learner</th>
-                      <th className="p-2.5 text-left">Issued</th>
-                      <th className="p-2.5 text-left">Due</th>
-                      <th className="p-2.5 text-left">Status</th>
-                      <th className="p-2.5 text-left">Fee</th>
+                      <th className="p-2.5">Barcode</th>
+                      <th className="p-2.5">Learner</th>
+                      <th className="p-2.5">Issued</th>
+                      <th className="p-2.5">Due Date</th>
+                      <th className="p-2.5">Status</th>
+                      <th className="p-2.5">Fee</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {issues.data?.map((iss: any) => (
-                      <tr key={iss.id} className="hover:bg-muted/20">
-                        <td className="p-2.5 font-mono font-medium">{iss.textbook_copies?.barcode || "—"}</td>
-                        <td className="p-2.5">
-                          {iss.students?.first_name} {iss.students?.last_name}
-                          <span className="text-muted-foreground block text-[10px]">Adm: {iss.students?.admission_no}</span>
-                        </td>
+                    {issues.data?.slice(0, 15).map((iss: any) => (
+                      <tr key={iss.id} className="hover:bg-muted/30">
+                        <td className="p-2.5 font-mono">{iss.textbook_copies?.barcode || "—"}</td>
+                        <td className="p-2.5 font-medium">{iss.students ? `${iss.students.first_name} ${iss.students.last_name}` : "—"}</td>
                         <td className="p-2.5">{iss.issued_on}</td>
                         <td className="p-2.5">{iss.due_on}</td>
                         <td className="p-2.5">
@@ -575,6 +594,18 @@ export function TextbookInventory({ schoolId }: Props) {
             </div>
           </div>
         )}
+
+        {/* Live Camera Scanner Overlay */}
+        <BarcodeScannerModal
+          isOpen={!!scannerTarget}
+          onClose={() => setScannerTarget(null)}
+          onScan={(code) => {
+            if (scannerTarget === "issue") setIssueBarcode(code);
+            if (scannerTarget === "return") setReturnBarcode(code);
+            setScannerTarget(null);
+          }}
+          title={scannerTarget === "issue" ? "Scan Textbook to Issue" : "Scan Returned Textbook"}
+        />
       </div>
     </Card>
   );
