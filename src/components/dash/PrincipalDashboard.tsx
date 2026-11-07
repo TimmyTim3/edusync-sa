@@ -21,6 +21,7 @@ import { SubjectPlanning } from "./SubjectPlanning";
 import { AttendanceLockdown } from "./AttendanceLockdown";
 import { TextbookInventory } from "./TextbookInventory";
 import { LearnerAccommodations } from "./LearnerAccommodations";
+import { OutboundMessaging } from "./OutboundMessaging";
 
 export function PrincipalDashboard() {
   const { user, schoolId } = useAuth();
@@ -124,6 +125,8 @@ export function PrincipalDashboard() {
        <TextbookInventory schoolId={schoolId} />
               <TextbookInventory schoolId={schoolId} />
        <LearnerAccommodations schoolId={schoolId} />
+              <LearnerAccommodations schoolId={schoolId} />
+       <OutboundMessaging schoolId={schoolId} />
        
        <StaffIngest schoolId={schoolId} />
        
