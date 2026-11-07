@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Shell } from "./Shell";
+import { Card } from "./Shell";
 import { toast } from "sonner";
 import { BookOpen, Barcode, Plus, Search, RotateCcw } from "lucide-react";
 
@@ -32,7 +32,7 @@ export function TextbookInventory({ schoolId }: Props) {
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 10);
-    return d.toISOString().split("T")[0];
+    return d.toISOString().slice(0, 10);
   });
   const [issuing, setIssuing] = useState(false);
 
@@ -155,7 +155,7 @@ export function TextbookInventory({ schoolId }: Props) {
       const { data: copy, error: copyErr } = await supabase.from("textbook_copies").select("id, status, title_id").eq("school_id", schoolId).eq("barcode", code).maybeSingle();
       if (copyErr || !copy) { toast.error(`Barcode "${code}" not found in inventory`); setIssuing(false); return; }
       if (copy.status === "issued") { toast.error(`Copy "${code}" is currently issued to another learner`); setIssuing(false); return; }
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = new Date().toISOString().slice(0, 10);
       const { error: issueErr } = await supabase.from("textbook_issues").insert({
         school_id: schoolId,
         copy_id: copy.id,
@@ -188,7 +188,7 @@ export function TextbookInventory({ schoolId }: Props) {
       if (!copy) { toast.error(`Barcode "${code}" was not found`); setProcessingReturn(false); return; }
       const { data: issue } = await supabase.from("textbook_issues").select("id").eq("copy_id", copy.id).is("returned_on", null).order("issued_on", { ascending: false }).maybeSingle();
       if (!issue) { toast.error(`No active loan record for barcode "${code}"`); setProcessingReturn(false); return; }
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = new Date().toISOString().slice(0, 10);
       const nextStatus = returnCondition === "lost" ? "lost" : "available";
       await supabase.from("textbook_issues").update({
         returned_on: todayStr,
@@ -210,7 +210,7 @@ export function TextbookInventory({ schoolId }: Props) {
   };
 
   return (
-    <Shell.Card
+    <Card
       title="Textbook & LTSM Inventory Manager"
       description="Official CAPS Learning & Teaching Support Material tracker. Catalog books, generate barcode batches, issue to learners, and track year-end returns and replacement fees."
     >
@@ -548,7 +548,7 @@ export function TextbookInventory({ schoolId }: Props) {
           </div>
         )}
       </div>
-    </Shell.Card>
+    </Card>
   );
                     }
                 
