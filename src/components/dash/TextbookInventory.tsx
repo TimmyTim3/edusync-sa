@@ -76,25 +76,32 @@ export function TextbookInventory({ schoolId }: Props) {
         id, copy_id, student_id, issued_on, due_on, returned_on, return_condition, fee, fee_paid, notes,
         textbook_copies ( barcode, textbook_titles ( title, grade ) ),
         students ( id, first_name, last_name, admission_no )
-      `).eq("school_id", schoolId).order("issued_on", { ascending: false }).limit(60);
+      `).eq("school_id", schoolId).order("issued_on", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
   });
 
-  const studentResults = useQuery({
-    queryKey: ["learner-search-textbook", schoolId, studentSearch],
+  const searchResults = useQuery({
+    queryKey: ["search-students-textbooks", schoolId, studentSearch],
     enabled: studentSearch.trim().length >= 2,
     queryFn: async () => {
       const q = studentSearch.trim();
-      const { data } = await supabase.from("students").select("id, first_name, last_name, admission_no").eq("school_id", schoolId).is("deleted_at", null).or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,admission_no.ilike.%${q}%`).limit(6);
+      const { data, error } = await supabase
+        .from("students")
+        .select("id, first_name, last_name, admission_no")
+        .eq("school_id", schoolId)
+        .is("deleted_at", null)
+        .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,admission_no.ilike.%${q}%`)
+        .limit(10);
+      if (error) throw error;
       return data ?? [];
     },
   });
 
   const handleCreateTitle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!titleName.trim()) { toast.error("Textbook title is required"); return; }
+    if (!titleName.trim()) return;
     setSavingTitle(true);
     try {
       const { error } = await supabase.from("textbook_titles").insert({
@@ -104,42 +111,45 @@ export function TextbookInventory({ schoolId }: Props) {
         publisher: publisher.trim() || null,
         grade,
         subject_id: selectedSubjectId || null,
-        total_copies: 0,
       });
       if (error) throw error;
-      toast.success("Textbook title added to LTSM catalogue");
-      setTitleName(""); setIsbn(""); setPublisher(""); setShowAddTitle(false);
-      void qc.invalidateQueries({ queryKey: ["textbook-titles", schoolId] });
+      toast.success("Textbook title cataloged successfully");
+      setTitleName("");
+      setIsbn("");
+      setPublisher("");
+      setShowAddTitle(false);
+      qc.invalidateQueries({ queryKey: ["textbook-titles", schoolId] });
     } catch (err: any) {
-      toast.error(err.message || "Failed to add title");
+      toast.error(err?.message || "Failed to add title");
     } finally {
       setSavingTitle(false);
     }
   };
 
-  const handleGenerateCopies = async () => {
-    if (!selectedTitleId) { toast.error("Please pick a textbook title"); return; }
-    if (!barcodePrefix.trim()) { toast.error("Barcode prefix is required (e.g. MATH-G10)"); return; }
-    if (copyCount < 1 || copyCount > 200) { toast.error("Please enter between 1 and 200 copies"); return; }
+  const handleGenerateCopies = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTitleId || !barcodePrefix.trim() || copyCount <= 0) return;
     setGeneratingCopies(true);
     try {
-      const prefix = barcodePrefix.trim().toUpperCase();
-      const newCopies = Array.from({ length: copyCount }, (_, i) => ({
+      const newRows = Array.from({ length: Math.min(copyCount, 150) }).map((_, idx) => ({
         school_id: schoolId,
         title_id: selectedTitleId,
-        barcode: `${prefix}-${String(i + 1).padStart(3, "0")}`,
-        condition: "new",
+        barcode: `${barcodePrefix.trim().toUpperCase()}-${String(idx + 1).padStart(3, "0")}`,
+        condition: "good",
         status: "available",
       }));
-      const { error } = await supabase.from("textbook_copies").insert(newCopies);
+      const { error } = await supabase.from("textbook_copies").insert(newRows as any);
       if (error) throw error;
-      await supabase.from("textbook_titles").update({ total_copies: (copies.data?.length ?? 0) + copyCount }).eq("id", selectedTitleId);
-      toast.success(`Generated ${copyCount} inventory copies with barcode prefix ${prefix}`);
+      await supabase.from("textbook_titles").update({
+        total_copies: (copies.data?.length || 0) + newRows.length,
+      }).eq("id", selectedTitleId);
+
+      toast.success(`Generated ${newRows.length} inventory barcode copies`);
       setBarcodePrefix("");
-      void qc.invalidateQueries({ queryKey: ["textbook-copies", selectedTitleId] });
-      void qc.invalidateQueries({ queryKey: ["textbook-titles", schoolId] });
+      qc.invalidateQueries({ queryKey: ["textbook-copies", selectedTitleId] });
+      qc.invalidateQueries({ queryKey: ["textbook-titles", schoolId] });
     } catch (err: any) {
-      toast.error(err.message || "Failed to generate copies");
+      toast.error(err?.message || "Failed to generate copies");
     } finally {
       setGeneratingCopies(false);
     }
@@ -147,8 +157,10 @@ export function TextbookInventory({ schoolId }: Props) {
 
   const handleIssueBook = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!issueBarcode.trim()) { toast.error("Please enter or scan a textbook barcode"); return; }
-    if (!selectedStudent) { toast.error("Please select a recipient learner"); return; }
+    if (!issueBarcode.trim() || !selectedStudent) {
+      toast.error("Please enter a barcode and select a learner");
+      return;
+    }
     setIssuing(true);
     try {
       const code = issueBarcode.trim().toUpperCase();
@@ -162,17 +174,18 @@ export function TextbookInventory({ schoolId }: Props) {
         student_id: selectedStudent.id,
         issued_on: todayStr,
         due_on: dueDate,
-        fee: 0,
-        fee_paid: false,
       });
       if (issueErr) throw issueErr;
+
       await supabase.from("textbook_copies").update({ status: "issued" }).eq("id", copy.id);
-      toast.success(`Issued ${code} to ${selectedStudent.name}`);
-      setIssueBarcode(""); setSelectedStudent(null); setStudentSearch("");
-      void qc.invalidateQueries({ queryKey: ["textbook-issues", schoolId] });
-      void qc.invalidateQueries({ queryKey: ["textbook-copies"] });
+      toast.success(`Book ${code} issued to ${selectedStudent.name}`);
+      setIssueBarcode("");
+      setSelectedStudent(null);
+      setStudentSearch("");
+      qc.invalidateQueries({ queryKey: ["textbook-issues", schoolId] });
+      qc.invalidateQueries({ queryKey: ["textbook-copies"] });
     } catch (err: any) {
-      toast.error(err.message || "Failed to issue textbook");
+      toast.error(err?.message || "Failed to issue textbook");
     } finally {
       setIssuing(false);
     }
@@ -180,7 +193,7 @@ export function TextbookInventory({ schoolId }: Props) {
 
   const handleProcessReturn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!returnBarcode.trim()) { toast.error("Please scan or type the returned barcode"); return; }
+    if (!returnBarcode.trim()) return;
     setProcessingReturn(true);
     try {
       const code = returnBarcode.trim().toUpperCase();
@@ -194,16 +207,22 @@ export function TextbookInventory({ schoolId }: Props) {
         returned_on: todayStr,
         return_condition: returnCondition,
         fee: replacementFee,
-        fee_paid: replacementFee === 0,
         notes: returnNotes.trim() || null,
       }).eq("id", issue.id);
-      await supabase.from("textbook_copies").update({ condition: returnCondition, status: nextStatus }).eq("id", copy.id);
-      toast.success(`Book return logged. Condition: ${returnCondition}${replacementFee > 0 ? ` (R${replacementFee} fee)` : ""}`);
-      setReturnBarcode(""); setReturnNotes(""); setReplacementFee(0);
-      void qc.invalidateQueries({ queryKey: ["textbook-issues", schoolId] });
-      void qc.invalidateQueries({ queryKey: ["textbook-copies"] });
+
+      await supabase.from("textbook_copies").update({
+        status: nextStatus,
+        condition: returnCondition === "lost" ? "damaged" : returnCondition,
+      }).eq("id", copy.id);
+
+      toast.success(`Copy ${code} returned (${returnCondition}).`);
+      setReturnBarcode("");
+      setReplacementFee(0);
+      setReturnNotes("");
+      qc.invalidateQueries({ queryKey: ["textbook-issues", schoolId] });
+      qc.invalidateQueries({ queryKey: ["textbook-copies"] });
     } catch (err: any) {
-      toast.error(err.message || "Failed to process return");
+      toast.error(err?.message || "Failed to process return");
     } finally {
       setProcessingReturn(false);
     }
@@ -215,49 +234,45 @@ export function TextbookInventory({ schoolId }: Props) {
       description="Official CAPS Learning & Teaching Support Material tracker. Catalog books, generate barcode batches, issue to learners, and track year-end returns and replacement fees."
     >
       <div className="space-y-6">
-        <div className="flex flex-wrap gap-2 border-b border-border pb-3">
+        <div className="flex border-b border-border text-xs font-medium gap-4">
           <button
-            type="button"
             onClick={() => setActiveTab("catalog")}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-              activeTab === "catalog" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors ${
+              activeTab === "catalog" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
-            <BookOpen className="h-4 w-4" /> LTSM Catalogue & Copies
+            <BookOpen className="h-4 w-4" /> Textbook Catalog & Barcodes
           </button>
           <button
-            type="button"
             onClick={() => setActiveTab("issue")}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-              activeTab === "issue" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors ${
+              activeTab === "issue" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
             <Barcode className="h-4 w-4" /> Issue to Learner
           </button>
           <button
-            type="button"
             onClick={() => setActiveTab("returns")}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-              activeTab === "returns" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors ${
+              activeTab === "returns" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
-            <RotateCcw className="h-4 w-4" /> Returns & Loss Recovery
+            <RotateCcw className="h-4 w-4" /> Returns & Lost Books
           </button>
         </div>
-                                                 {activeTab === "catalog" && (
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">Registered textbook titles: <strong>{titles.data?.length ?? 0}</strong></p>
+
+        {activeTab === "catalog" && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">{titles.data?.length || 0} Titles cataloged</span>
               <button
-                type="button"
                 onClick={() => setShowAddTitle(!showAddTitle)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium"
+                className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold flex items-center gap-1"
               >
                 <Plus className="h-4 w-4" /> {showAddTitle ? "Close Form" : "Add Textbook Title"}
               </button>
             </div>
-
-            {showAddTitle && (
+                {showAddTitle && (
               <form onSubmit={handleCreateTitle} className="p-4 border rounded-xl bg-card space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -272,7 +287,7 @@ export function TextbookInventory({ schoolId }: Props) {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Target Grade</label>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Grade</label>
                     <select
                       value={grade}
                       onChange={(e) => setGrade(e.target.value)}
@@ -284,115 +299,126 @@ export function TextbookInventory({ schoolId }: Props) {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Publisher</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Pearson / Oxford University Press"
-                      value={publisher}
-                      onChange={(e) => setPublisher(e.target.value)}
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Subject</label>
+                    <select
+                      value={selectedSubjectId}
+                      onChange={(e) => setSelectedSubjectId(e.target.value)}
                       className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
-                    />
+                    >
+                      <option value="">Select CAPS Subject (optional)</option>
+                      {subjects.data?.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground block mb-1">ISBN (Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="978-0-123456-78-9"
-                      value={isbn}
-                      onChange={(e) => setIsbn(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
-                    />
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Publisher & ISBN</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Publisher (e.g. Pearson)"
+                        value={publisher}
+                        onChange={(e) => setPublisher(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                      />
+                      <input
+                        type="text"
+                        placeholder="ISBN"
+                        value={isbn}
+                        onChange={(e) => setIsbn(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="flex justify-end">
-                  <button type="submit" disabled={savingTitle} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
-                    {savingTitle ? "Saving..." : "Save Title to Catalogue"}
-                  </button>
-                </div>
+                <button type="submit" disabled={savingTitle} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-semibold">
+                  {savingTitle ? "Saving..." : "Save Title to Catalog"}
+                </button>
               </form>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {titles.data?.map((t) => (
-                <div
-                  key={t.id}
-                  onClick={() => setSelectedTitleId(t.id)}
-                  className={`p-4 border rounded-xl cursor-pointer transition ${
-                    selectedTitleId === t.id ? "border-primary bg-primary/5 shadow-sm" : "border-border bg-card hover:border-primary/40"
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-semibold text-sm">{t.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-0.5">{t.grade} • {t.publisher || "Publisher unspecified"}</p>
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-muted font-medium">{t.total_copies} Copies</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {selectedTitleId && (
-              <div className="p-4 border rounded-xl bg-muted/20 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="text-sm font-semibold flex items-center gap-2">
-                    <Barcode className="h-4 w-4 text-primary" /> Physical Copies & Barcode Batch
-                  </h4>
-                  <p className="text-xs text-muted-foreground">Total tracked copies: <strong>{copies.data?.length ?? 0}</strong></p>
-                </div>
-                <div className="flex flex-wrap items-end gap-3 p-3 bg-card border rounded-lg">
-                  <div className="flex-1 min-w-[140px]">
-                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Barcode Prefix</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. MATH-G10"
-                      value={barcodePrefix}
-                      onChange={(e) => setBarcodePrefix(e.target.value)}
-                      className="w-full px-3 py-1.5 border rounded-lg text-xs bg-background"
-                    />
-                  </div>
-                  <div className="w-24">
-                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Quantity</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={200}
-                      value={copyCount}
-                      onChange={(e) => setCopyCount(parseInt(e.target.value) || 1)}
-                      className="w-full px-3 py-1.5 border rounded-lg text-xs bg-background"
-                    />
-                  </div>
+              <div className="border rounded-xl divide-y max-h-72 overflow-y-auto bg-card">
+                {titles.data?.map((t) => (
                   <button
-                    type="button"
-                    onClick={handleGenerateCopies}
-                    disabled={generatingCopies}
-                    className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium"
+                    key={t.id}
+                    onClick={() => setSelectedTitleId(t.id)}
+                    className={`w-full p-3 text-left flex justify-between items-center transition-colors ${
+                      selectedTitleId === t.id ? "bg-primary/10 border-l-4 border-l-primary" : "hover:bg-muted/40"
+                    }`}
                   >
-                    {generatingCopies ? "Generating..." : "Generate Barcodes"}
-                  </button>
-                </div>
-                <div className="max-h-48 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {copies.data?.map((c) => (
-                    <div key={c.id} className="p-2 border rounded-md bg-background text-xs flex justify-between items-center">
-                      <span className="font-mono font-medium">{c.barcode}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded capitalize font-medium ${
-                        c.status === "available" ? "bg-emerald-100 text-emerald-800" : c.status === "issued" ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"
-                      }`}>{c.status}</span>
+                    <div>
+                      <span className="text-xs font-bold text-foreground block">{t.title}</span>
+                      <span className="text-[11px] text-muted-foreground">{t.grade} • {t.publisher || "DBE"}</span>
                     </div>
-                  ))}
-                </div>
+                    <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-muted">
+                      {t.total_copies || 0} copies
+                    </span>
+                  </button>
+                ))}
               </div>
-            )}
+
+              {selectedTitleId ? (
+                <div className="p-4 border rounded-xl bg-card space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Barcode Batch Generator</h4>
+                  <form onSubmit={handleGenerateCopies} className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Prefix</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. MATH-G10"
+                          value={barcodePrefix}
+                          onChange={(e) => setBarcodePrefix(e.target.value)}
+                          className="w-full px-3 py-1.5 border rounded-lg text-xs bg-background font-mono"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Copies to Add</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={150}
+                          value={copyCount}
+                          onChange={(e) => setCopyCount(parseInt(e.target.value) || 1)}
+                          className="w-full px-3 py-1.5 border rounded-lg text-xs bg-background"
+                        />
+                      </div>
+                    </div>
+                    <button type="submit" disabled={generatingCopies} className="w-full py-2 bg-secondary text-secondary-foreground rounded-lg text-xs font-medium">
+                      {generatingCopies ? "Generating..." : `Generate ${copyCount} Barcodes`}
+                    </button>
+                  </form>
+                  <div className="border rounded-lg max-h-36 overflow-y-auto divide-y text-xs font-mono">
+                    {copies.data?.map((c) => (
+                      <div key={c.id} className="p-2 flex justify-between">
+                        <span>{c.barcode}</span>
+                        <span className={`text-[10px] uppercase font-bold ${c.status === "available" ? "text-emerald-600" : "text-amber-600"}`}>
+                          {c.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 border rounded-xl bg-muted/20 text-center text-xs text-muted-foreground flex flex-col items-center justify-center">
+                  <Barcode className="h-8 w-8 mb-2 opacity-40" />
+                  Select a title on the left to view or generate barcode copies.
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {activeTab === "issue" && (
-          <form onSubmit={handleIssueBook} className="space-y-4 max-w-xl p-4 border rounded-xl bg-card">
+          <form onSubmit={handleIssueBook} className="p-4 border rounded-xl bg-card space-y-4 max-w-xl">
+            <h4 className="text-sm font-semibold">Issue Textbook Copy to Learner</h4>
             <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1">Textbook Barcode</label>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Scan or Type Barcode</label>
               <input
                 type="text"
-                placeholder="Scan or type barcode (e.g. MATH-G10-001)"
+                placeholder="e.g. MATH-G10-001"
                 value={issueBarcode}
                 onChange={(e) => setIssueBarcode(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg text-sm bg-background font-mono"
@@ -400,43 +426,44 @@ export function TextbookInventory({ schoolId }: Props) {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1">Search Learner</label>
-              <div className="relative">
-                <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Type name, surname or admission number..."
-                  value={studentSearch}
-                  onChange={(e) => setStudentSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm bg-background"
-                />
-              </div>
-              {studentResults.data && studentResults.data.length > 0 && !selectedStudent && (
-                <div className="mt-1 border rounded-lg bg-card shadow-sm divide-y">
-                  {studentResults.data.map((s) => (
-                    <div
-                      key={s.id}
-                      onClick={() => {
-                        setSelectedStudent({ id: s.id, name: `${s.first_name} ${s.last_name}`, admission: s.admission_no });
-                        setStudentSearch(`${s.first_name} ${s.last_name} (${s.admission_no})`);
-                      }}
-                      className="p-2 text-xs hover:bg-muted cursor-pointer flex justify-between"
-                    >
-                      <span className="font-medium">{s.first_name} {s.last_name}</span>
-                      <span className="font-mono text-muted-foreground">Adm: {s.admission_no}</span>
-                    </div>
-                  ))}
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Find Learner</label>
+              {selectedStudent ? (
+                <div className="flex items-center justify-between p-2 border rounded-lg bg-muted/40">
+                  <span className="text-xs font-medium">{selectedStudent.name} ({selectedStudent.admission})</span>
+                  <button type="button" onClick={() => setSelectedStudent(null)} className="text-xs text-red-600">Change</button>
                 </div>
-              )}
-              {selectedStudent && (
-                <div className="mt-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex justify-between items-center">
-                  <span>Selected: <strong>{selectedStudent.name}</strong> ({selectedStudent.admission})</span>
-                  <button type="button" onClick={() => { setSelectedStudent(null); setStudentSearch(""); }} className="text-emerald-700 underline text-[11px]">Change</button>
+              ) : (
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search learner name or admission no..."
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                  />
+                  {searchResults.data && searchResults.data.length > 0 && (
+                    <div className="absolute z-10 left-0 right-0 mt-1 border rounded-lg bg-card shadow-lg max-h-40 overflow-y-auto divide-y">
+                      {searchResults.data.map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedStudent({ id: st.id, name: `${st.first_name} ${st.last_name}`, admission: st.admission_no });
+                            setStudentSearch("");
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-muted text-xs flex justify-between"
+                        >
+                          <span>{st.first_name} {st.last_name}</span>
+                          <span className="font-mono text-muted-foreground">Adm: {st.admission_no}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
             <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1">Expected Return Date</label>
+              <label className="text-xs font-semibold text-muted-foreground block mb-1">Return Due Date</label>
               <input
                 type="date"
                 value={dueDate}
@@ -446,7 +473,7 @@ export function TextbookInventory({ schoolId }: Props) {
               />
             </div>
             <button type="submit" disabled={issuing} className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
-              {issuing ? "Logging Issue..." : "Confirm Textbook Issue"}
+              {issuing ? "Issuing..." : "Confirm Book Issue"}
             </button>
           </form>
         )}
@@ -454,6 +481,7 @@ export function TextbookInventory({ schoolId }: Props) {
         {activeTab === "returns" && (
           <div className="space-y-6">
             <form onSubmit={handleProcessReturn} className="p-4 border rounded-xl bg-card space-y-4 max-w-xl">
+              <h4 className="text-sm font-semibold">Process Book Return or Report Lost</h4>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">Scan or Type Returned Barcode</label>
                 <input
@@ -550,5 +578,5 @@ export function TextbookInventory({ schoolId }: Props) {
       </div>
     </Card>
   );
-                    }
-                
+                      }
+                          
