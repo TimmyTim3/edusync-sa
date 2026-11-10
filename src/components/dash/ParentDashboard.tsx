@@ -60,13 +60,18 @@ export function ParentDashboard() {
         child!.class_id
           ? supabase.from("homework").select("id, title, due_date, subjects(name)").eq("class_id", child!.class_id).order("due_date").limit(40)
           : Promise.resolve({ data: [] }),
-        supabase.from("notices").select("id, title, body, priority, published_at")
-          .or([
-            "scope.eq.school",
-            child!.classes?.grade ? `and(scope.eq.grade,grade.eq."${child!.classes.grade.replace(/"/g, "")}")` : null,
-            child!.class_id ? `and(scope.eq.class,class_id.eq.${child!.class_id})` : null,
-          ].filter(Boolean).join(","))
-          .order("published_at", { ascending: false }).limit(6),
+        (async () => {
+          const base = () => supabase.from("notices").select("id, title, body, priority, published_at, scope, grade, class_id").eq("school_id", schoolId!);
+          const [schoolNotices, gradeNotices, classNotices] = await Promise.all([
+            base().eq("scope", "school").order("published_at", { ascending: false }).limit(6),
+            child!.classes?.grade ? base().eq("scope", "grade").eq("grade", child!.classes.grade).order("published_at", { ascending: false }).limit(6) : Promise.resolve({ data: [], error: null }),
+            child!.class_id ? base().eq("scope", "class").eq("class_id", child!.class_id).order("published_at", { ascending: false }).limit(6) : Promise.resolve({ data: [], error: null }),
+          ]);
+          const error = schoolNotices.error ?? gradeNotices.error ?? classNotices.error;
+          if (error) throw error;
+          return { data: [...(schoolNotices.data ?? []), ...(gradeNotices.data ?? []), ...(classNotices.data ?? [])]
+            .sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? "")).slice(0, 6), error: null };
+        })(),
       ]);
       return { att: att.data ?? [], marks: marks.data ?? [], beh: beh.data ?? [], hw: (hw.data ?? []) as { id: string; title: string; due_date: string; subjects: { name: string } | null }[], notices: notices.data ?? [] };
     },
@@ -95,7 +100,7 @@ export function ParentDashboard() {
 
   return (
     <Shell title="Family dashboard" subtitle={`${kids.length} ${kids.length === 1 ? "child" : "children"} linked`} lastUpdate={lastUpdate}>
-      <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
+      <div className="mb-6 flex min-w-0 gap-2 overflow-x-auto pb-1">
         {kids.map((k, i) => {
           const color = `var(--chart-${(i % 5) + 1})`;
           const active = k.id === child?.id;
@@ -105,7 +110,7 @@ export function ParentDashboard() {
               variant="outline"
               size="sm"
               onClick={() => setSel(k.id)}
-              className="shrink-0 gap-2 border-2"
+              className="min-h-11 shrink-0 gap-2 border-2"
               style={{ borderColor: color, ...(active ? { backgroundColor: color, color: "var(--background)" } : {}) }}
             >
               {k.photo_url ? <img src={k.photo_url} alt="" className="h-6 w-6 rounded-full" /> : <span className="h-3 w-3 rounded-full" style={{ backgroundColor: active ? "var(--background)" : color }} />}
