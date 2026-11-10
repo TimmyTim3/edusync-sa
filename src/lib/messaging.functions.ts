@@ -84,10 +84,13 @@ function createSmsProvider(): SmsProviderAdapter {
   const provider = (process.env.SMS_PROVIDER ?? "").toLowerCase();
   const config = { apiKey: process.env.SMS_API_KEY, apiSecret: process.env.SMS_API_SECRET, senderId: process.env.SMS_SENDER_ID };
   if (provider === "mock") return new MockLogAdapter();
-  if (provider === "bulksms" && config.apiKey && config.apiSecret) return new BulkSmsAdapter(config);
-  if (provider === "africastalking" && config.apiKey && config.apiSecret) return new AfricasTalkingAdapter(config);
-  if (provider === "twilio" && config.apiKey && config.apiSecret && config.senderId) return new TwilioAdapter(config);
-  if (process.env.NODE_ENV !== "production" && !provider) return new MockLogAdapter();
+  const credentialsReady = provider === "twilio"
+    ? Boolean(config.apiKey && config.apiSecret && config.senderId)
+    : Boolean(config.apiKey && config.apiSecret);
+  if (process.env.NODE_ENV !== "production" && !credentialsReady) return new MockLogAdapter();
+  if (provider === "bulksms" && credentialsReady) return new BulkSmsAdapter(config);
+  if (provider === "africastalking" && credentialsReady) return new AfricasTalkingAdapter(config);
+  if (provider === "twilio" && credentialsReady) return new TwilioAdapter(config);
   throw new Error("SMS provider is not configured. Set SMS_PROVIDER, SMS_API_KEY, SMS_API_SECRET and SMS_SENDER_ID as required.");
 }
 
