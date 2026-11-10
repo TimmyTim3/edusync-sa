@@ -6,8 +6,9 @@ export interface SmsProviderAdapter {
   sendMessage(recipient: string, message: string): Promise<{ success: boolean; messageId?: string; error?: string }>;
 }
 
-type ProviderConfig = { apiKey?: string; apiSecret?: string; senderId?: string };
+type ProviderConfig = { apiKey: string | undefined; apiSecret: string | undefined; senderId: string | undefined };
 type Channel = "sms" | "whatsapp";
+type ProviderResult = { success: boolean; messageId?: string; error?: string };
 
 const responseError = async (response: Response) => {
   const body = await response.text().catch(() => "");
@@ -23,7 +24,7 @@ class MockLogAdapter implements SmsProviderAdapter {
 
 class BulkSmsAdapter implements SmsProviderAdapter {
   constructor(private config: ProviderConfig) {}
-  async sendMessage(recipient: string, message: string) {
+  async sendMessage(recipient: string, message: string): Promise<ProviderResult> {
     if (recipient.startsWith("whatsapp:")) return { success: false, error: "BulkSMS adapter supports SMS only; configure Twilio for WhatsApp." };
     const auth = btoa(`${this.config.apiKey}:${this.config.apiSecret}`);
     const response = await fetch("https://api.bulksms.com/v1/messages", {
@@ -34,13 +35,13 @@ class BulkSmsAdapter implements SmsProviderAdapter {
     });
     if (!response.ok) return { success: false, error: await responseError(response) };
     const result = await response.json().catch(() => ({})) as { id?: string;[key: string]: unknown };
-    return { success: true, messageId: result.id };
+    return { success: true, ...(result.id ? { messageId: result.id } : {}) };
   }
 }
 
 class AfricasTalkingAdapter implements SmsProviderAdapter {
   constructor(private config: ProviderConfig) {}
-  async sendMessage(recipient: string, message: string) {
+  async sendMessage(recipient: string, message: string): Promise<ProviderResult> {
     if (recipient.startsWith("whatsapp:")) return { success: false, error: "Africa's Talking adapter supports SMS only; configure Twilio for WhatsApp." };
     const form = new URLSearchParams({ username: this.config.apiKey ?? "", to: recipient, message });
     if (this.config.senderId) form.set("from", this.config.senderId);
@@ -54,13 +55,13 @@ class AfricasTalkingAdapter implements SmsProviderAdapter {
     const result = await response.json().catch(() => ({})) as { SMSMessageData?: { Recipients?: Array<{ messageId?: string; status?: string }> } };
     const recipientResult = result.SMSMessageData?.Recipients?.[0];
     if (recipientResult?.status && !/success/i.test(recipientResult.status)) return { success: false, error: recipientResult.status };
-    return { success: true, messageId: recipientResult?.messageId };
+    return { success: true, ...(recipientResult?.messageId ? { messageId: recipientResult.messageId } : {}) };
   }
 }
 
 class TwilioAdapter implements SmsProviderAdapter {
   constructor(private config: ProviderConfig) {}
-  async sendMessage(recipient: string, message: string) {
+  async sendMessage(recipient: string, message: string): Promise<ProviderResult> {
     const sid = this.config.apiKey ?? "";
     const auth = btoa(`${sid}:${this.config.apiSecret}`);
     const whatsapp = recipient.startsWith("whatsapp:");
@@ -76,18 +77,17 @@ class TwilioAdapter implements SmsProviderAdapter {
     });
     if (!response.ok) return { success: false, error: await responseError(response) };
     const result = await response.json().catch(() => ({})) as { sid?: string };
-    return { success: true, messageId: result.sid };
+    return { success: true, ...(result.sid ? { messageId: result.sid } : {}) };
   }
 }
 
-function createSmsProvider(): SmsProviderAdapter {
-  const provider = (process.env.SMS_PROVIDER ?? "").toLowerCase();
-  const config = { apiKey: process.env.SMS_API_KEY, apiSecret: process.env.SMS_API_SECRET, senderId: process.env.SMS_SENDER_ID };
+function createSmsProvider(providerSetting: string | undefined, config: ProviderConfig, nodeEnv: string | undefined): SmsProviderAdapter {
+  const provider = (providerSetting ?? "").toLowerCase();
   if (provider === "mock") return new MockLogAdapter();
   const credentialsReady = provider === "twilio"
     ? Boolean(config.apiKey && config.apiSecret && config.senderId)
     : Boolean(config.apiKey && config.apiSecret);
-  if (process.env.NODE_ENV !== "production" && !credentialsReady) return new MockLogAdapter();
+  if (nodeEnv !== "production" && !credentialsReady) return new MockLogAdapter();
   if (provider === "bulksms" && credentialsReady) return new BulkSmsAdapter(config);
   if (provider === "africastalking" && credentialsReady) return new AfricasTalkingAdapter(config);
   if (provider === "twilio" && credentialsReady) return new TwilioAdapter(config);
@@ -113,7 +113,15 @@ export const dispatchOutboundQueue = createServerFn({ method: "POST" })
     if (!(roles ?? []).some((row) => allowed.has(row.role))) throw new Error("You are not authorised to dispatch messages for this school");
 
     // Validate provider configuration before claiming rows; otherwise a missing secret could strand jobs in processing.
-    const adapter = createSmsProvider();
+    const adapter = createSmsProvider(
+      process.env["SMS_PROVIDER"],
+      {
+        apiKey: process.env["SMS_API_KEY"],
+        apiSecret: process.env["SMS_API_SECRET"],
+        senderId: process.env["SMS_SENDER_ID"],
+      },
+      process.env["NODE_ENV"],
+    );
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: claimed, error: claimError } = await (supabaseAdmin as any).rpc("claim_outbound_messages", {
       p_school_id: data.schoolId,

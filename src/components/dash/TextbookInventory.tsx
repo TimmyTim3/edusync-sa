@@ -237,6 +237,7 @@ export function TextbookInventory({ schoolId }: Props) {
       title="Textbook & LTSM Inventory Manager"
       description="Official CAPS Learning & Teaching Support Material tracker. Catalog books, generate barcode batches, issue to learners with live camera scan, and track year-end returns."
     >
+      <div className="space-y-6">
               <div className="flex border-b border-border text-xs font-medium gap-2 sm:gap-4 overflow-x-auto pb-1">
           <button
             onClick={() => setActiveTab("catalog")}
@@ -609,5 +610,4 @@ export function TextbookInventory({ schoolId }: Props) {
       </div>
     </Card>
   );
-                      }
-                          
+}

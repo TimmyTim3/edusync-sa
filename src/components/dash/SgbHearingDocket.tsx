@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 import { Card } from "./Shell";
 import { toast } from "sonner";
 import { Search, Printer, Save } from "lucide-react";
@@ -17,8 +18,17 @@ const SASA_OFFENCES: Record<string, { label: string; level: number; sasaRef: str
   insubordination: { label: "Gross Insubordination & Threatening Staff", level: 3, sasaRef: "SASA S8(2) - Level 3 Disruption" },
   cyberbullying: { label: "Severe Bullying, Intimidation or Harassment", level: 4, sasaRef: "SASA S8(4) - Level 4 Dignity & Safety" },
 };
+const DEFAULT_OFFENCE = SASA_OFFENCES["fighting"]!;
+const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+})[character]!);
 
 export function SgbHearingDocket({ schoolId }: Props) {
+  const { user } = useAuth();
   const qc = useQueryClient();
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string; admission: string; grade: string; class: string; parentPhone?: string } | null>(null);
@@ -35,21 +45,31 @@ export function SgbHearingDocket({ schoolId }: Props) {
     enabled: studentSearch.trim().length >= 2,
     queryFn: async () => {
       const q = studentSearch.trim();
-      const { data, error } = await supabase
+      const base = () => supabase
         .from("students")
-        .select("id, first_name, last_name, admission_no, grade, parent_phone, classes(name)")
+        .select("id, first_name, last_name, admission_no, classes ( grade, name ), parent_student ( parents ( phone, whatsapp_number ) )")
         .eq("school_id", schoolId)
-        .is("deleted_at", null)
-        .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,admission_no.ilike.%${q}%`)
-        .limit(8);
+        .is("deleted_at", null);
+      const [byFirstName, byLastName, byAdmission] = await Promise.all([
+        base().ilike("first_name", `%${q}%`).limit(8),
+        base().ilike("last_name", `%${q}%`).limit(8),
+        base().ilike("admission_no", `%${q}%`).limit(8),
+      ]);
+      const error = byFirstName.error ?? byLastName.error ?? byAdmission.error;
       if (error) throw error;
-      return (data ?? []).map((s: any) => ({
+      const unique = new Map<string, NonNullable<typeof byFirstName.data>[number]>();
+      for (const student of [...(byFirstName.data ?? []), ...(byLastName.data ?? []), ...(byAdmission.data ?? [])]) {
+        unique.set(student.id, student);
+      }
+      return [...unique.values()].slice(0, 8).map((s) => ({
         id: s.id,
         name: `${s.first_name} ${s.last_name}`,
         admission: s.admission_no || "—",
-        grade: s.grade || "—",
+        grade: s.classes?.grade || "—",
         class: s.classes?.name || "—",
-        parentPhone: s.parent_phone || "",
+        parentPhone: s.parent_student
+          ?.map((link) => link.parents?.whatsapp_number || link.parents?.phone)
+          .find((phone) => Boolean(phone)) || "",
       }));
     },
   });
@@ -71,21 +91,21 @@ export function SgbHearingDocket({ schoolId }: Props) {
 
   const handlePrintDocket = () => {
     if (!selectedStudent) { toast.error("Please select a candidate learner first"); return; }
-    const offence = SASA_OFFENCES[offenceKey];
+    const offence = SASA_OFFENCES[offenceKey] ?? DEFAULT_OFFENCE;
     const printWindow = window.open("", "_blank");
     if (!printWindow) { toast.error("Please allow popups to print docket"); return; }
 
     const rows = (history.data ?? []).map((h: any) => `
       <tr>
-        <td>${h.created_at.slice(0, 10)}</td>
+        <td>${escapeHtml(h.created_at.slice(0, 10))}</td>
         <td>${h.is_positive ? "Merit" : "Concern"}</td>
-        <td>${h.severity || "—"}</td>
-        <td>${h.points > 0 ? "+" + h.points : h.points}</td>
-        <td>${h.note}</td>
+        <td>${escapeHtml(h.severity || "—")}</td>
+        <td>${escapeHtml(h.points > 0 ? "+" + h.points : h.points)}</td>
+        <td>${escapeHtml(h.note)}</td>
       </tr>
     `).join("") || '<tr><td colspan="5" style="text-align:center;">No prior documented offences on record.</td></tr>';
 
-    const html = `<!DOCTYPE html><html><head><title>SGB Docket - ${selectedStudent.admission} - ${selectedStudent.name}</title>
+    const html = `<!DOCTYPE html><html><head><title>SGB Docket - ${escapeHtml(selectedStudent.admission)} - ${escapeHtml(selectedStudent.name)}</title>
       <style>
         body { font-family: sans-serif; font-size: 11px; color: #111; line-height: 1.4; padding: 24px; max-width: 800px; margin: auto; }
         .hdr { text-align: center; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 12px; }
@@ -106,28 +126,28 @@ export function SgbHearingDocket({ schoolId }: Props) {
       </div>
       <div class="grid">
         <div class="box"><div class="box-t">Learner Profile</div>
-          <div><strong>Name:</strong> ${selectedStudent.name}</div>
-          <div><strong>Admission:</strong> ${selectedStudent.admission}</div>
-          <div><strong>Grade / Class:</strong> ${selectedStudent.grade} (${selectedStudent.class})</div>
-          <div><strong>Guardian Phone:</strong> ${selectedStudent.parentPhone || "On file in front office"}</div>
+          <div><strong>Name:</strong> ${escapeHtml(selectedStudent.name)}</div>
+          <div><strong>Admission:</strong> ${escapeHtml(selectedStudent.admission)}</div>
+          <div><strong>Grade / Class:</strong> ${escapeHtml(selectedStudent.grade)} (${escapeHtml(selectedStudent.class)})</div>
+          <div><strong>Guardian Phone:</strong> ${escapeHtml(selectedStudent.parentPhone || "On file in front office")}</div>
         </div>
         <div class="box"><div class="box-t">Tribunal Details</div>
-          <div><strong>Hearing Date:</strong> ${hearingDate}</div>
-          <div><strong>Incident Date:</strong> ${incidentDate}</div>
-          <div><strong>Venue:</strong> ${venue}</div>
+          <div><strong>Hearing Date:</strong> ${escapeHtml(hearingDate)}</div>
+          <div><strong>Incident Date:</strong> ${escapeHtml(incidentDate)}</div>
+          <div><strong>Venue:</strong> ${escapeHtml(venue)}</div>
           <div><strong>Authority:</strong> SGB Disciplinary Committee</div>
         </div>
       </div>
       <div class="box" style="margin-bottom:10px;"><div class="box-t">Code of Conduct Charge Allegation</div>
-        <div style="font-size:12px; font-weight:bold; margin-bottom:2px;">SASA Level ${offence.level}: ${offence.label}</div>
-        <div style="font-size:10px; color:#555; margin-bottom:4px;">${offence.sasaRef}</div>
-        <div style="white-space:pre-wrap; background:#f9f9f9; padding:6px; border:1px solid #eee;">${chargeDetails || "Particulars as presented by School Disciplinary Representative."}</div>
+        <div style="font-size:12px; font-weight:bold; margin-bottom:2px;">SASA Level ${offence.level}: ${escapeHtml(offence.label)}</div>
+        <div style="font-size:10px; color:#555; margin-bottom:4px;">${escapeHtml(offence.sasaRef)}</div>
+        <div style="white-space:pre-wrap; background:#f9f9f9; padding:6px; border:1px solid #eee;">${escapeHtml(chargeDetails || "Particulars as presented by School Disciplinary Representative.")}</div>
       </div>
       <div class="box" style="margin-bottom:10px;"><div class="box-t">Prior Behavioural Interventions</div>
         <table><thead><tr><th>Date</th><th>Type</th><th>Severity</th><th>Points</th><th>Notes</th></tr></thead><tbody>${rows}</tbody></table>
       </div>
       <div class="box"><div class="box-t">Tribunal Recommended Sanction</div>
-        <div><strong>Recommended Sanction:</strong> ${sanction}</div>
+        <div><strong>Recommended Sanction:</strong> ${escapeHtml(sanction)}</div>
         <div style="font-size:10px; color:#666; margin-top:2px;">In terms of SASA Section 9, learner is entitled to legal or guardian representation before final sanction.</div>
       </div>
       <div class="sigs">
@@ -145,12 +165,15 @@ export function SgbHearingDocket({ schoolId }: Props) {
 
   const handleSaveToArchive = async () => {
     if (!selectedStudent) { toast.error("Please select a candidate learner first"); return; }
+    if (!user?.id) { toast.error("Please sign in again before saving this docket"); return; }
     setSaving(true);
     try {
-      const offence = SASA_OFFENCES[offenceKey];
+      const offence = SASA_OFFENCES[offenceKey] ?? DEFAULT_OFFENCE;
       const snapshot = { candidate: selectedStudent, offence, incidentDate, hearingDate, venue, chargeDetails, sanction, history: history.data ?? [], generatedAt: new Date().toISOString() };
-      const { error } = await supabase.from("disciplinary_archives").insert({
+      const { error } = await supabase.from("disciplinary_reports").insert({
         school_id: schoolId,
+        created_by: user.id,
+        prepared_for_hearing: true,
         title: `SGB Docket: ${selectedStudent.name} (${selectedStudent.admission}) - Level ${offence.level}`,
         snapshot: snapshot as any,
         filters: { type: "sgb_docket", student_id: selectedStudent.id, level: offence.level } as any,
@@ -213,7 +236,7 @@ export function SgbHearingDocket({ schoolId }: Props) {
           <div className="space-y-2">
             <label className="text-xs font-semibold text-muted-foreground block">SASA Level & Allegation</label>
             <select value={offenceKey} onChange={(e) => setOffenceKey(e.target.value)} className="w-full px-3 py-1.5 border rounded-lg text-xs bg-background">
-              {Object.entries(SASA_OFFENCES).map(([k, v]) => (
+        {Object.entries(SASA_OFFENCES).map(([k, v]) => (
                 <option key={k} value={k}>Level {v.level} — {v.label}</option>
               ))}
             </select>

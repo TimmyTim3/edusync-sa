@@ -35,7 +35,7 @@ export function OutboundMessaging({ schoolId }: Props) {
   const [audience, setAudience] = useState<"all" | "grade" | "student">("grade");
   const [targetGrade, setTargetGrade] = useState("Grade 10");
   const [studentSearch, setStudentSearch] = useState("");
-  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string; phone?: string } | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string; phone?: string; email?: string } | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [messageBody, setMessageBody] = useState("");
   const [sending, setSending] = useState(false);
@@ -66,7 +66,7 @@ export function OutboundMessaging({ schoolId }: Props) {
         .from("outbound_messages")
         .select(`
           id, channel, recipient_name, recipient_phone, recipient_email, body, status, retry_count, last_error, scheduled_at, sent_at,
-          students ( first_name, last_name, admission_no, grade )
+          students ( first_name, last_name, admission_no, classes ( grade, name ) )
         `)
         .eq("school_id", schoolId)
         .order("created_at", { ascending: false })
@@ -82,7 +82,7 @@ export function OutboundMessaging({ schoolId }: Props) {
     queryFn: async () => {
       const q = studentSearch.trim();
       // Use independent parameterized filters instead of interpolating user input into PostgREST's .or() grammar.
-      const base = () => supabase.from("students").select("id, first_name, last_name, admission_no, grade, parent_phone").eq("school_id", schoolId).is("deleted_at", null);
+      const base = () => supabase.from("students").select("id, first_name, last_name, admission_no, classes ( grade, name ), parent_student ( parents ( phone, whatsapp_number, email ) )").eq("school_id", schoolId).is("deleted_at", null);
       const [byFirst, byLast, byAdmission] = await Promise.all([
         base().ilike("first_name", `%${q}%`).limit(10),
         base().ilike("last_name", `%${q}%`).limit(10),
@@ -120,6 +120,11 @@ export function OutboundMessaging({ schoolId }: Props) {
           setSending(false);
           return;
         }
+        if (channel === "email" && !selectedStudent.email) {
+          toast.error("This learner has no linked guardian email address");
+          setSending(false);
+          return;
+        }
 
         const { error } = await supabase.from("outbound_messages").insert({
           school_id: schoolId,
@@ -127,18 +132,36 @@ export function OutboundMessaging({ schoolId }: Props) {
           template_id: selectedTemplateId || null,
           student_id: selectedStudent.id,
           recipient_name: selectedStudent.name,
-          recipient_phone: selectedStudent.phone || null,
+          recipient_phone: channel === "email" ? null : selectedStudent.phone || null,
+          recipient_email: channel === "email" ? selectedStudent.email || null : null,
           body: messageBody.replace("{{learner_name}}", selectedStudent.name),
           status: "queued",
         });
         if (error) throw error;
         toast.success(`Message queued for ${selectedStudent.name}`);
       } else {
-        let query = supabase.from("students").select("id, first_name, last_name, parent_phone").eq("school_id", schoolId).is("deleted_at", null);
+        let classIds: string[] | null = null;
         if (audience === "grade") {
-          query = query.eq("grade", targetGrade);
+          const { data: classes, error: classError } = await supabase
+            .from("classes")
+            .select("id")
+            .eq("school_id", schoolId)
+            .eq("grade", targetGrade.replace(/^Grade\s+/i, ""));
+          if (classError) throw classError;
+          classIds = (classes ?? []).map((row) => row.id);
+          if (!classIds.length) {
+            toast.info("No classes found for this grade");
+            setSending(false);
+            return;
+          }
         }
 
+        let query = supabase
+          .from("students")
+          .select("id, first_name, last_name, class_id, classes ( grade, name ), parent_student ( parents ( phone, whatsapp_number, email ) )")
+          .eq("school_id", schoolId)
+          .is("deleted_at", null);
+        if (classIds) query = query.in("class_id", classIds);
         const { data: targets, error: targetErr } = await query.limit(200);
         if (targetErr) throw targetErr;
 
@@ -148,16 +171,28 @@ export function OutboundMessaging({ schoolId }: Props) {
           return;
         }
 
-        const batch = targets.map((st) => ({
-          school_id: schoolId,
-          channel,
-          template_id: selectedTemplateId || null,
-          student_id: st.id,
-          recipient_name: `${st.first_name} ${st.last_name}`,
-          recipient_phone: st.parent_phone || null,
-          body: messageBody.replace("{{learner_name}}", `${st.first_name} ${st.last_name}`).replace("{{grade}}", targetGrade),
-          status: "queued",
-        }));
+        const batch = targets.map((st) => {
+          const learnerName = `${st.first_name} ${st.last_name}`;
+          const guardian = st.parent_student?.map((link) => link.parents).find((parent) => parent != null);
+          const phone = guardian?.whatsapp_number || guardian?.phone || null;
+          return {
+            school_id: schoolId,
+            channel,
+            template_id: selectedTemplateId || null,
+            student_id: st.id,
+            recipient_name: learnerName,
+            recipient_phone: channel === "email" ? null : phone,
+            recipient_email: channel === "email" ? guardian?.email || null : null,
+            body: messageBody.replace("{{learner_name}}", learnerName).replace("{{grade}}", st.classes?.grade ?? ""),
+            status: "queued" as const,
+          };
+        }).filter((row) => channel === "email" ? Boolean(row.recipient_email) : Boolean(row.recipient_phone));
+
+        if (!batch.length) {
+          toast.info("No linked guardians with a usable contact detail were found");
+          setSending(false);
+          return;
+        }
 
         const { error: batchErr } = await supabase.from("outbound_messages").insert(batch as any);
         if (batchErr) throw batchErr;
@@ -323,7 +358,7 @@ export function OutboundMessaging({ schoolId }: Props) {
                   <div className="flex items-center justify-between p-2.5 border rounded-lg bg-muted/40 text-xs">
                     <div>
                       <span className="font-semibold text-foreground">{selectedStudent.name}</span>
-                      <span className="text-muted-foreground ml-2">Phone: {selectedStudent.phone || "No phone listed"}</span>
+                      <span className="text-muted-foreground ml-2">Phone: {selectedStudent.phone || "—"} · Email: {selectedStudent.email || "—"}</span>
                     </div>
                     <button type="button" onClick={() => setSelectedStudent(null)} className="text-red-600 font-medium">Change</button>
                   </div>
@@ -343,13 +378,20 @@ export function OutboundMessaging({ schoolId }: Props) {
                             key={st.id}
                             type="button"
                             onClick={() => {
-                              setSelectedStudent({ id: st.id, name: `${st.first_name} ${st.last_name}`, phone: st.parent_phone || undefined });
+                              const guardian = st.parent_student?.map((link) => link.parents).find((parent) => parent != null);
+                              const phone = guardian?.whatsapp_number || guardian?.phone;
+                              setSelectedStudent({
+                                id: st.id,
+                                name: `${st.first_name} ${st.last_name}`,
+                                ...(phone ? { phone } : {}),
+                                ...(guardian?.email ? { email: guardian.email } : {}),
+                              });
                               setStudentSearch("");
                             }}
                             className="w-full text-left px-3 py-2 hover:bg-muted text-xs flex justify-between"
                           >
-                            <span>{st.first_name} {st.last_name} ({st.grade})</span>
-                            <span className="font-mono text-muted-foreground">{st.parent_phone || "No phone"}</span>
+                            <span>{st.first_name} {st.last_name} ({st.classes?.grade ?? "No grade"})</span>
+                            <span className="font-mono text-muted-foreground">{st.parent_student?.map((link) => link.parents?.whatsapp_number || link.parents?.phone).find(Boolean) || "No phone"}</span>
                           </button>
                         ))}
                       </div>
