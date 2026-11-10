@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { dispatchOutboundQueue } from "@/lib/messaging.functions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "./Shell";
 import { toast } from "sonner";
-import { Send, MessageSquare, Mail, RefreshCw, CheckCircle2, Clock, Plus } from "lucide-react";
+import { Send, MessageSquare, Mail, RefreshCw, CheckCircle2, Clock, Plus, Loader2 } from "lucide-react";
 
 interface Props {
   schoolId: string;
@@ -12,6 +14,22 @@ interface Props {
 export function OutboundMessaging({ schoolId }: Props) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"dispatch" | "queue" | "templates">("dispatch");
+  const dispatchQueue = useServerFn(dispatchOutboundQueue);
+  const [dispatching, setDispatching] = useState(false);
+
+  const handleDispatchQueue = async () => {
+    if (dispatching) return;
+    setDispatching(true);
+    try {
+      const result = await dispatchQueue({ data: { schoolId } });
+      toast.success(`Queue processed: ${result.sent} sent · ${result.failed} failed`);
+      await qc.invalidateQueries({ queryKey: ["outbound-messages", schoolId] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not dispatch the queue");
+    } finally {
+      setDispatching(false);
+    }
+  };
 
   const [channel, setChannel] = useState<"sms" | "whatsapp" | "email">("sms");
   const [audience, setAudience] = useState<"all" | "grade" | "student">("grade");
@@ -63,15 +81,18 @@ export function OutboundMessaging({ schoolId }: Props) {
     enabled: studentSearch.trim().length >= 2,
     queryFn: async () => {
       const q = studentSearch.trim();
-      const { data, error } = await supabase
-        .from("students")
-        .select("id, first_name, last_name, admission_no, grade, parent_phone")
-        .eq("school_id", schoolId)
-        .is("deleted_at", null)
-        .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,admission_no.ilike.%${q}%`)
-        .limit(10);
+      // Use independent parameterized filters instead of interpolating user input into PostgREST's .or() grammar.
+      const base = () => supabase.from("students").select("id, first_name, last_name, admission_no, grade, parent_phone").eq("school_id", schoolId).is("deleted_at", null);
+      const [byFirst, byLast, byAdmission] = await Promise.all([
+        base().ilike("first_name", `%${q}%`).limit(10),
+        base().ilike("last_name", `%${q}%`).limit(10),
+        base().ilike("admission_no", `%${q}%`).limit(10),
+      ]);
+      const error = byFirst.error ?? byLast.error ?? byAdmission.error;
       if (error) throw error;
-      return data ?? [];
+      const unique = new Map<string, NonNullable<typeof byFirst.data>[number]>();
+      for (const row of [...(byFirst.data ?? []), ...(byLast.data ?? []), ...(byAdmission.data ?? [])]) unique.set(row.id, row);
+      return [...unique.values()].slice(0, 10);
     },
   });
 
@@ -390,14 +411,25 @@ export function OutboundMessaging({ schoolId }: Props) {
 
         {tab === "queue" && (
           <div className="border rounded-xl overflow-hidden bg-card">
-            <div className="p-3 border-b bg-muted/30 flex justify-between items-center">
+            <div className="p-3 border-b bg-muted/30 flex flex-wrap justify-between items-center gap-2">
               <span className="text-xs font-semibold">Latest Dispatch Activity</span>
-              <button
-                onClick={() => qc.invalidateQueries({ queryKey: ["outbound-messages", schoolId] })}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              >
-                <RefreshCw className="h-3 w-3" /> Refresh
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleDispatchQueue()}
+                  disabled={dispatching}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  {dispatching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {dispatching ? "Dispatching…" : "Dispatch Pending Queue"}
+                </button>
+                <button
+                  onClick={() => qc.invalidateQueries({ queryKey: ["outbound-messages", schoolId] })}
+                  className="flex min-h-11 items-center gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className="h-3 w-3" /> Refresh
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
