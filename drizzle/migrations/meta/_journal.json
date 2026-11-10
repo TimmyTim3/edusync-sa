@@ -190,6 +190,13 @@
       "when": 1793795507211,
       "tag": "0026_complete_remaining_bundles_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794315822795,
+      "tag": "0027_tighten_feature_flag_and_plan_reads",
+      "breakpoints": true
     }
   ]
 }
