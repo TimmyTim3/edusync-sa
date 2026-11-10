@@ -26,9 +26,9 @@ function RoleChip() {
   const { availableRoles, primaryRole, setViewAs } = useAuth();
   if (availableRoles.length < 2) return null;
   return (
-    <div className="flex items-center justify-end gap-2 border-b bg-muted px-4 py-1.5 text-sm">
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 border-b bg-muted px-4 py-2 text-sm">
       <span className="text-muted-foreground">Viewing as:</span>
-      <select className="rounded-md border bg-background px-2 py-1" value={primaryRole ?? ""} onChange={(e) => setViewAs(e.target.value as never)}>
+      <select aria-label="Switch dashboard role" className="min-h-11 max-w-full rounded-md border bg-background px-3 py-2" value={primaryRole ?? ""} onChange={(e) => setViewAs(e.target.value as never)}>
         {availableRoles.map((r) => <option key={r} value={r}>{roleLabel[r]}</option>)}
       </select>
     </div>
