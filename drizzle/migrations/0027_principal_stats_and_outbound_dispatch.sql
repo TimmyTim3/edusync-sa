@@ -7,6 +7,10 @@ CREATE INDEX IF NOT EXISTS idx_parents_school_user
   ON public.parents (school_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_user_roles_school_role_user
   ON public.user_roles (school_id, role, user_id);
+CREATE INDEX IF NOT EXISTS idx_behaviour_school_positive
+  ON public.behaviour_notes (school_id, is_positive);
+CREATE INDEX IF NOT EXISTS idx_notices_school_published
+  ON public.notices (school_id, published_at DESC);
 
 CREATE OR REPLACE FUNCTION public.get_principal_dashboard_stats(p_school_id uuid)
 RETURNS jsonb
@@ -53,7 +57,7 @@ BEGIN
   IF v_day IS NULL THEN
     SELECT max(ar.date) INTO v_day
     FROM public.attendance_records ar
-    WHERE ar.school_id = p_school_id;
+    WHERE ar.school_id = p_school_id AND ar.date < current_date;
   END IF;
 
   IF v_day IS NOT NULL THEN
