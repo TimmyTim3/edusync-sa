@@ -241,7 +241,7 @@ export function OutboundMessaging({ schoolId }: Props) {
                 <div className="flex border-b border-border text-xs font-medium gap-2 sm:gap-4 overflow-x-auto pb-1">
           <button
             onClick={() => setTab("dispatch")}
-            className={`pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors shrink-0 whitespace-nowrap ${
+            className={`min-h-11 px-2 pb-2.5 flex items-center gap-1.5 border-b-2 transition-colors shrink-0 whitespace-nowrap ${
               tab === "dispatch" ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground"
             }`}
           >
@@ -292,7 +292,7 @@ export function OutboundMessaging({ schoolId }: Props) {
                 <select
                   value={audience}
                   onChange={(e) => setAudience(e.target.value as any)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                  className="min-h-11 w-full px-3 py-2 border rounded-lg text-sm bg-background"
                 >
                   <option value="grade">By Grade</option>
                   <option value="student">Individual Learner Guardian</option>
@@ -387,7 +387,7 @@ export function OutboundMessaging({ schoolId }: Props) {
                 value={messageBody}
                 onChange={(e) => setMessageBody(e.target.value)}
                 placeholder="Dear Parent, this is an official notice regarding {{learner_name}}..."
-                className="w-full p-3 border rounded-lg text-sm bg-background font-sans"
+                className="min-h-24 w-full p-3 border rounded-lg text-sm bg-background font-sans"
                 required
               />
               <div className="mt-1 flex gap-2 text-[10px] text-muted-foreground">
@@ -520,7 +520,7 @@ export function OutboundMessaging({ schoolId }: Props) {
                     placeholder="e.g. Absenteeism Alert"
                     value={newTemplateName}
                     onChange={(e) => setNewTemplateName(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-xs bg-background"
+                    className="min-h-11 w-full px-3 py-2 border rounded-lg text-xs bg-background"
                     required
                   />
                 </div>
@@ -554,7 +554,7 @@ export function OutboundMessaging({ schoolId }: Props) {
                   placeholder="Dear Parent, your child {{learner_name}} was marked absent today..."
                   value={newTemplateBody}
                   onChange={(e) => setNewTemplateBody(e.target.value)}
-                  className="w-full p-3 border rounded-lg text-xs bg-background"
+                  className="min-h-20 w-full p-3 border rounded-lg text-xs bg-background"
                   required
                 />
               </div>
