@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useSchoolRealtime } from "@/lib/realtime";
 import { useFeatureFlags } from "@/lib/features";
-import { Shell, Card, Stat, today } from "./Shell";
+import { Shell, Card, Stat } from "./Shell";
 import { DisciplinaryReports } from "./DisciplinaryReports";
 import { ClassGlance } from "./ClassGlance";
 import { BehaviourDrawer, ClassTeacherAssign, LearnerSearch, NeedsCompletion, NoticesManager, ParentLinker, ReliefManager, RolloverWizard, StaffIngest, SubjectAllocation, TransferClearance } from "./SchoolTools";
@@ -34,53 +34,19 @@ export function PrincipalDashboard() {
     queryKey: ["principal-stats", schoolId],
     enabled: !!schoolId,
     queryFn: async () => {
-      const c = (q: PromiseLike<{ count: number | null }>) => Promise.resolve(q).then((r) => r.count ?? 0);
       const sid = schoolId;
       if (!sid) throw new Error("No school selected");
-      // Independent figures load in parallel with the "which day" lookup.
-      const basicsP = Promise.all([
-        supabase.from("schools").select("name").eq("id", sid).single(),
-        c(supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", sid)),
-        c(supabase.from("parents").select("id", { count: "exact", head: true }).eq("school_id", sid)),
-        c(supabase.from("user_roles").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("role", "teacher")),
-        c(supabase.from("behaviour_notes").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("is_positive", true)),
-        c(supabase.from("behaviour_notes").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("is_positive", false)),
-        supabase.from("classes").select("id, name, grade").eq("school_id", sid).order("grade").order("name"),
-        supabase.from("notices").select("id, title, scope, published_at").eq("school_id", sid).order("published_at", { ascending: false }).limit(8),
-      ]);
-      // most recent full school day: skip days where only a few classes were marked
-      const [roll, lastRes] = await Promise.all([
-        c(supabase.from("students").select("id", { count: "exact", head: true }).eq("school_id", sid).is("deleted_at", null)),
-        supabase.from("attendance_records").select("date").eq("school_id", sid).order("date", { ascending: false }).limit(1),
-      ]);
-      let day = today();
-      const d0 = lastRes.data?.[0]?.date as string | undefined;
-      if (d0) {
-        day = d0;
-        const base = new Date(d0 + "T00:00:00Z");
-        const candidates = Array.from({ length: 45 }, (_, i) => new Date(base.getTime() - i * 86400000).toISOString().slice(0, 10));
-        const counts = await Promise.all(candidates.map((d) => c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", d))));
-        const idx = counts.findIndex((n) => n >= roll * 0.5);
-        if (idx >= 0) day = candidates[idx] ?? day;
-      }
-      const [[school, students, parents, teachers, positive, negative, classesRes, noticesRes], marked, present, late] = await Promise.all([
-        basicsP,
-        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day)),
-        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day).in("status", ["present", "late"])),
-        c(supabase.from("attendance_records").select("id", { count: "exact", head: true }).eq("school_id", sid).eq("date", day).eq("status", "late")),
-      ]);
-      const classes = classesRes.data;
-      const notices = noticesRes.data;
-      const notPresent: unknown[] = [];
-      for (let from = 0; from < 5000; from += 1000) {
-        const { data: page } = await supabase
-          .from("attendance_records").select("status, students(first_name, last_name), classes(name)")
-          .eq("school_id", sid).eq("date", day).in("status", ["absent", "excused", "half_day"]).order("status").range(from, from + 999);
-        notPresent.push(...(page ?? []));
-        if (!page || page.length < 1000) break;
-      }
-      const absent = notPresent as { status: string; students: { first_name: string; last_name: string } | null; classes: { name: string } | null }[];
-      return { name: school.data?.name ?? "School", day, students, parents, teachers, marked, present, late, positive, negative, classes: classes ?? [], absent, notices: notices ?? [] };
+      const { data, error } = await (supabase as any).rpc("get_principal_dashboard_stats", { p_school_id: sid });
+      if (error) throw error;
+      if (!data) throw new Error("Principal dashboard statistics were not returned");
+      return data as {
+        name: string; day: string; students: number; parents: number; teachers: number;
+        marked: number; present: number; late: number; positive: number; negative: number;
+        classes: { id: string; name: string; grade: string }[];
+        absent: { status: string; students: { first_name: string; last_name: string } | null; classes: { name: string } | null }[];
+        notices: { id: string; title: string; scope: string; published_at: string | null }[];
+      };
+
     },
   });
 

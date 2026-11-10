@@ -19,7 +19,7 @@ export function FrontOfficeDashboard() {
   if (!schoolId) return <Shell title="Front office" lastUpdate={null}><Card><Empty text="Your account is not linked to a school yet." /></Card></Shell>;
   return (
     <Shell title="Front office" subtitle="Learner lookup, parent contacts, absence calls and gate register" lastUpdate={null}>
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <Card title="Find a learner"><LearnerSearch schoolId={schoolId} onPick={(l) => setLearner(l as L)} />
           {learner && <LearnerContacts learner={learner} onClose={() => setLearner(null)} />}
         </Card>
@@ -39,10 +39,10 @@ function LearnerContacts({ learner, onClose }: { learner: L; onClose: () => void
     queryFn: async () => (await supabase.from("parent_student").select("id, relationship, is_primary, parents(full_name, phone, email)").eq("student_id", learner.id)).data as unknown as { id: string; relationship: string; is_primary: boolean; parents: { full_name: string; phone: string | null; email: string | null } | null }[] ?? [],
   });
   return (
-    <div className="mt-3 rounded-xl border p-3 text-sm">
+    <div className="mt-3 min-w-0 rounded-xl border p-3 text-sm">
       <div className="flex items-start justify-between gap-2">
         <div><p className="font-semibold">{learner.first_name} {learner.last_name}</p><p className="text-xs text-muted-foreground">{learner.admission_no} · {learner.classes?.name ?? "No class"}</p></div>
-        <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
+        <Button size="sm" variant="ghost" className="min-h-11" onClick={onClose}>Close</Button>
       </div>
       <p className="mt-2 text-xs font-medium uppercase text-muted-foreground">Parents / guardians</p>
       {q.data?.length === 0 && <p className="text-muted-foreground">No guardian on record — add one below.</p>}
@@ -50,7 +50,7 @@ function LearnerContacts({ learner, onClose }: { learner: L; onClose: () => void
         {q.data?.map((p) => (
           <li key={p.id} className="flex flex-wrap justify-between gap-2">
             <span>{p.parents?.full_name} <span className="text-muted-foreground">({p.relationship}{p.is_primary ? ", primary" : ""})</span></span>
-            <span className="text-muted-foreground">{p.parents?.phone ? <a className="underline" href={`tel:${p.parents.phone}`}>{p.parents.phone}</a> : "No phone"}{p.parents?.email ? ` · ${p.parents.email}` : ""}</span>
+            <span className="text-muted-foreground">{p.parents?.phone ? <a aria-label={`Call ${p.parents.full_name}`} className="inline-flex min-h-11 items-center underline" href={`tel:${p.parents.phone}`}>{p.parents.phone}</a> : "No phone"}{p.parents?.email ? ` · ${p.parents.email}` : ""}</span>
           </li>
         ))}
       </ul>
@@ -82,11 +82,11 @@ function AbsenceCall({ schoolId }: { schoolId: string }) {
   const rows = (list.data ?? []) as unknown as { id: string; absence_date: string; reason: string; reported_by: string | null; channel: string; students: { first_name: string; last_name: string; admission_no: string } | null }[];
   return (
     <Card title="Absence calls & notes">
-      {who ? <p className="mb-2 text-sm">Learner: <b>{who.first_name} {who.last_name}</b> ({who.admission_no}) <button className="ml-2 text-xs underline" onClick={() => setWho(null)}>change</button></p>
+      {who ? <p className="mb-2 text-sm">Learner: <b>{who.first_name} {who.last_name}</b> ({who.admission_no}) <button className="ml-2 inline-flex min-h-11 items-center px-2 text-xs underline" onClick={() => setWho(null)}>change</button></p>
         : <LearnerSearch schoolId={schoolId} onPick={(l) => setWho(l as L)} />}
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <div className="mt-2 grid min-w-0 gap-2 sm:grid-cols-2">
         <Input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} aria-label="Absence date" />
-        <select className="rounded-md border bg-background px-2 py-2 text-sm" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} aria-label="Reason">{REASONS.map((r) => <option key={r}>{r}</option>)}</select>
+        <select className="min-h-11 rounded-md border bg-background px-3 py-2 text-sm" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} aria-label="Reason">{REASONS.map((r) => <option key={r}>{r}</option>)}</select>
         <Input placeholder="Reported by (e.g. Mother)" value={f.by} onChange={(e) => setF({ ...f, by: e.target.value })} />
         <select className="rounded-md border bg-background px-2 py-2 text-sm" value={f.channel} onChange={(e) => setF({ ...f, channel: e.target.value })} aria-label="How reported"><option value="phone">Phone call</option><option value="whatsapp">WhatsApp</option><option value="letter">Letter / note</option><option value="walk_in">Walk-in</option></select>
       </div>
