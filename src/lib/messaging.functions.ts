@@ -109,6 +109,8 @@ export const dispatchOutboundQueue = createServerFn({ method: "POST" })
     const allowed = new Set(["school_admin", "teacher", "clerk"]);
     if (!(roles ?? []).some((row) => allowed.has(row.role))) throw new Error("You are not authorised to dispatch messages for this school");
 
+    // Validate provider configuration before claiming rows; otherwise a missing secret could strand jobs in processing.
+    const adapter = createSmsProvider();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: claimed, error: claimError } = await (supabaseAdmin as any).rpc("claim_outbound_messages", {
       p_school_id: data.schoolId,
@@ -120,7 +122,6 @@ export const dispatchOutboundQueue = createServerFn({ method: "POST" })
     }>;
     if (!messages.length) return { claimed: 0, sent: 0, failed: 0 };
 
-    const adapter = createSmsProvider();
     let sent = 0;
     let failed = 0;
     for (const item of messages) {
