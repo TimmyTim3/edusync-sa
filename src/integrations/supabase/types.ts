@@ -2272,8 +2272,42 @@ export type Database = {
         Args: { _school: string; _student: string }
         Returns: boolean
       }
+      claim_outbound_messages: {
+        Args: { p_limit?: number; p_school_id: string }
+        Returns: {
+          body: string
+          channel: string
+          created_at: string
+          created_by: string | null
+          delivered_at: string | null
+          id: string
+          last_error: string | null
+          provider_message_id: string | null
+          recipient_email: string | null
+          recipient_name: string | null
+          recipient_phone: string | null
+          retry_count: number
+          scheduled_at: string
+          school_id: string
+          sent_at: string | null
+          status: string
+          student_id: string | null
+          template_id: string | null
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "outbound_messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       clear_demo_data: { Args: never; Returns: Json }
       delete_school: { Args: { _school: string }; Returns: Json }
+      get_principal_dashboard_stats: {
+        Args: { p_school_id: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
