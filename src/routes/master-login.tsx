@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
+import { unlockMaster } from "@/lib/master.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,7 +48,8 @@ function MasterLogin() {
     if (busy) return;
     setBusy(true);
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email: "timmytim691@gmail.com", password });
+      const { email } = await unlockMaster({ data: { password } });
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) throw signInError;
       localStorage.setItem(LOCAL_KEY, "1");
       await navigate({ to: "/master" });
