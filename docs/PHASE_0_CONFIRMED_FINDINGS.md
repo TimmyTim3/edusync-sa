@@ -32,3 +32,17 @@ The first workflow run found 4,312 ESLint errors (mostly Prettier formatting vio
 - Principal stats RPC checks the caller's role for the supplied school before returning data.
 - Two files use prefix `0027`; the journal includes only `0027_tighten_feature_flag_and_plan_reads`. This is a migration-history inconsistency, not proof of missing live objects.
 - Demo purge migrations intentionally contain destructive functions. Do not execute these as ordinary migrations or during audit.
+
+
+## Master login history — clarification (verified from Git commit history)
+
+This section supersedes any wording that could imply the audit patch changed the live Master Control login flow.
+
+- **2026-11-20 09:46:23 UTC — Lovable commit `4d2fb057`:** introduced the `unlockMaster` helper and changed `master-login.tsx` to call it before signing in. The helper checked a hard-coded passphrase and used the service-role client to set the fixed platform-admin account password.
+- **2026-11-20 09:57:19 UTC — Lovable commit `a62e8d3`:** reverted the login page to direct Supabase password sign-in using `timmytim691@gmail.com`; it removed the `unlockMaster` import/call. This was explicitly titled "sign in directly so master login works on Vercel".
+- **2026-11-20 11:04:49 UTC — commit `ac9afd2`:** retained direct sign-in and added exit-flow/password-visibility improvements.
+- **2026-11-20 13:00:41 UTC — audit branch commit `c7aecf0`:** changed only the now-unreferenced `unlockMaster` helper. It did not modify `src/routes/master-login.tsx`, the email used by the login page, the direct Supabase sign-in call, the local gate key, or platform statistics.
+
+**Current route behaviour:** the Master Login page submits the entered password directly to Supabase Auth for `timmytim691@gmail.com`. The platform stats function remains separate and uses the authenticated Supabase client after checking that the signed-in email is the configured platform administrator.
+
+**Safety decision:** do not merge the `unlockMaster` helper patch until its intended future use is decided. It is not part of the current login route. The patch does not alter the current route, but it changes an unused helper's contract; leave it isolated on the audit branch pending full Phase 0 review.
