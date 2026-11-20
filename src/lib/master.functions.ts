@@ -60,10 +60,13 @@ type CountTable = "schools" | "students" | "parents" | "attendance_records" | "m
 export const platformStats = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    // Authenticate the caller with their normal Supabase session first. Only the
+    // explicitly allow-listed platform administrator may use this server-side
+    // service-role client to read platform-wide totals across tenant RLS rules.
     assertPlatformAdmin(context.claims as Record<string, unknown>);
-    const { supabase } = context;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const count = async (table: CountTable) => {
-      const { count: total, error } = await supabase.from(table).select("id", { count: "exact", head: true });
+      const { count: total, error } = await supabaseAdmin.from(table).select("id", { count: "exact", head: true });
       if (error) {
         console.error(`[Master stats] Failed to count ${table}:`, error);
         throw new Error(`Could not load ${table.replaceAll("_", " ")} total: ${error.message}`);
