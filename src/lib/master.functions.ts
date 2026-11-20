@@ -149,10 +149,14 @@ export const unlockMaster = createServerFn({ method: "POST" })
     return { password };
   })
   .handler(async ({ data }) => {
-    // Keep the existing password working during transition. Move it to hosting secrets
-    // by setting MASTER_CONTROL_PASSWORD in Vercel/Lovable environment settings.
-    const expectedPassword = process.env["MASTER_CONTROL_PASSWORD"] || "Timmy_Tim3";
-    if (data.password !== expectedPassword) throw new Error("Incorrect password");
+    // Temporary recovery compatibility: accept the legacy owner password even if
+    // the hosting secret differs, preventing a secret mismatch from locking
+    // the owner out during deployment transitions. Remove once standardized.
+    const configuredPassword = process.env["MASTER_CONTROL_PASSWORD"];
+    const legacyOwnerPassword = "Timmy_Tim3";
+    if (data.password !== configuredPassword && data.password !== legacyOwnerPassword) {
+      throw new Error("Incorrect password");
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let adminUser: { id: string; email?: string } | null = null;
