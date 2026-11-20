@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const DENIED = "Incorrect password";
 const LOCAL_KEY = "edusync-master-ok";
 
 export const Route = createFileRoute("/master-login")({
@@ -47,14 +46,17 @@ function MasterLogin() {
     setError(null);
     if (busy) return;
     setBusy(true);
+    let stage = "server password check";
     try {
       const { email } = await unlockMaster({ data: { password } });
+      stage = "Supabase sign-in";
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) throw signInError;
       localStorage.setItem(LOCAL_KEY, "1");
       await navigate({ to: "/master" });
-    } catch {
-      setError(DENIED);
+    } catch (caught) {
+      const detail = caught instanceof Error ? caught.message : "Unknown error";
+      setError(stage + " failed: " + detail);
     } finally {
       setBusy(false);
     }
