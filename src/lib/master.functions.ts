@@ -148,7 +148,7 @@ export const unlockMaster = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     // Keep the existing password working during transition. Move it to hosting secrets
     // by setting MASTER_CONTROL_PASSWORD in Vercel/Lovable environment settings.
-    const expectedPassword = process.env.MASTER_CONTROL_PASSWORD || "Timmy_Tim3";
+    const expectedPassword = process.env["MASTER_CONTROL_PASSWORD"] || "Timmy_Tim3";
     if (data.password !== expectedPassword) throw new Error("Incorrect password");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
