@@ -139,6 +139,8 @@ function Master() {
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
+        {stats.isPending && <div role="status" className="mb-4 rounded-md border bg-card p-3 text-sm text-muted-foreground">Loading platform totals…</div>}
+        {stats.isError && <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"><span className="text-destructive">Platform totals could not be loaded: {stats.error instanceof Error ? stats.error.message : "Unknown error"}</span><Button size="sm" variant="outline" onClick={() => void stats.refetch()}><RefreshCw className="mr-2 h-4 w-4" /> Retry</Button></div>}
         <div className="mb-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[["Schools", stats.data?.schools, Building2], ["Learners", stats.data?.students, Users], ["Attendance records", stats.data?.attendance, Activity], ["Marks recorded", stats.data?.marks, Check]].map(([label, value, Icon]) => {
             const Symbol = Icon as typeof Activity;
