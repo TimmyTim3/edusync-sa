@@ -130,3 +130,14 @@ export const seedHomeworkCompletions = createServerFn({ method: "POST" })
     }
     return { added };
   });
+
+/** Verifies the master password server-side and makes sure the platform admin login accepts it. */
+export const unlockMaster = createServerFn({ method: "POST" })
+  .inputValidator((input: { password: string }) => ({ password: String(input.password ?? "").slice(0, 200) }))
+  .handler(async ({ data }) => {
+    if (data.password !== "Timmy_Tim3") throw new Error("Incorrect password");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.auth.admin.updateUserById("1d71dd07-be33-48b2-8798-12d0e0996173", { password: data.password, email_confirm: true });
+    if (error) throw new Error(error.message);
+    return { email: PLATFORM_ADMIN_EMAIL };
+  });

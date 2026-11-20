@@ -2,11 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
+import { unlockMaster } from "@/lib/master.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const MASTER_PASSWORD = "Timmy_Tim3";
 const DENIED = "Incorrect password";
 const LOCAL_KEY = "edusync-master-ok";
 
@@ -40,18 +41,19 @@ function MasterLogin() {
     }
   }, [isPlatformAdmin, navigate]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
-
-    if (password === MASTER_PASSWORD) {
+    try {
+      const { email } = await unlockMaster({ data: { password } });
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw signInError;
       localStorage.setItem(LOCAL_KEY, "1");
       void navigate({ to: "/master" });
-    } else {
+    } catch {
       setError(DENIED);
     }
-
     setBusy(false);
   };
 
