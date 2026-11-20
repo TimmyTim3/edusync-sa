@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ShieldAlert, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ function MasterLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Already authorised (either via normal admin session or local password gate)
   useEffect(() => {
@@ -43,16 +44,18 @@ function MasterLogin() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (busy) return;
     setBusy(true);
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: "timmytim691@gmail.com", password });
       if (signInError) throw signInError;
       localStorage.setItem(LOCAL_KEY, "1");
-      void navigate({ to: "/master" });
+      await navigate({ to: "/master" });
     } catch {
       setError(DENIED);
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   return (
@@ -78,18 +81,31 @@ function MasterLogin() {
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="m-pw">Password</Label>
-            <Input
-              id="m-pw"
-              type="password"
-              required
-              autoFocus
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
-            />
+            <div className="relative">
+              <Input
+                id="m-pw"
+                type={showPassword ? "text" : "password"}
+                required
+                autoFocus
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                className="pr-12"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
-          <Button className="w-full" disabled={busy}>
-            Sign in
+          <Button className="w-full" type="submit" disabled={busy || !password.trim()}>
+            {busy ? "Signing in…" : "Sign in"}
           </Button>
         </form>
       </div>

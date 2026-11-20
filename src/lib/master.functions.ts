@@ -61,10 +61,17 @@ export const platformStats = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     assertPlatformAdmin(context.claims as Record<string, unknown>);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabase } = context;
     const count = async (table: CountTable) => {
-      const { count: c } = await supabaseAdmin.from(table).select("id", { count: "exact", head: true });
-      return c ?? 0;
+      const { count: total, error } = await supabase.from(table).select("id", { count: "exact", head: true });
+      if (error) {
+        console.error(`[Master stats] Failed to count ${table}:`, error);
+        throw new Error(`Could not load ${table.replaceAll("_", " ")} total: ${error.message}`);
+      }
+      if (total === null) {
+        throw new Error(`Could not load ${table.replaceAll("_", " ")} total: count was not returned`);
+      }
+      return total;
     };
     const [schools, students, parents, attendance, marks, notices, staff] = await Promise.all([
       count("schools"),

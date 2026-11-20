@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { clearDemoData, deleteSchool, manageSchoolRemotely, platformStats, seedDemoSchool, type Credential } from "@/lib/master.functions";
 import { LearnerImport } from "@/components/LearnerImport";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Json } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/master")({
@@ -59,6 +60,7 @@ function Master() {
   const [schoolName, setSchoolName] = useState("");
   const [selectedSchool, setSelectedSchool] = useState("");
   const [newFlagSchool, setNewFlagSchool] = useState("");
+  const [exiting, setExiting] = useState(false);
 
   const enabled = !loading && isPlatformAdmin;
   const stats = useQuery({ queryKey: ["master-stats"], enabled, queryFn: () => getStats() });
@@ -132,15 +134,36 @@ function Master() {
     <div className="dark min-h-screen bg-background text-foreground">
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-4 sm:px-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Exit Master Control Centre"
+            aria-label="Exit Master Control Centre"
+            disabled={exiting}
+            onClick={async () => {
+              if (exiting) return;
+              setExiting(true);
+              try {
+                localStorage.removeItem("edusync-master-ok");
+                await signOut();
+                await navigate({ to: "/master-login", replace: true });
+              } finally {
+                setExiting(false);
+              }
+            }}
+          ><LogOut className="h-4 w-4" /></Button>
           <ShieldCheck className="h-7 w-7 text-primary" />
           <div><h1 className="font-display text-lg font-semibold">Master Control Centre</h1><p className="text-xs text-muted-foreground">EduSync · Platform administration</p></div>
           <Button className="ml-auto" variant="ghost" size="icon" title="Refresh data" aria-label="Refresh data" onClick={refresh}><RefreshCw className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="icon" title="Sign out" aria-label="Sign out" onClick={() => void signOut()}><LogOut className="h-4 w-4" /></Button>
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
+        {stats.isPending && <div role="status" className="mb-4 rounded-md border bg-card p-3 text-sm text-muted-foreground">Loading platform totals…</div>}
+        {stats.isError && <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"><span className="text-destructive">Platform totals could not be loaded: {stats.error instanceof Error ? stats.error.message : "Unknown error"}</span><Button size="sm" variant="outline" onClick={() => void stats.refetch()}><RefreshCw className="mr-2 h-4 w-4" /> Retry</Button></div>}
         <div className="mb-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[["Schools", stats.data?.schools, Building2], ["Learners", stats.data?.students, Users], ["Attendance records", stats.data?.attendance, Activity], ["Marks recorded", stats.data?.marks, Check]].map(([label, value, Icon]) => {
+          {stats.isPending
+            ? Array.from({ length: 4 }, (_, index) => <div key={index} className="space-y-3 rounded-md border bg-card p-4"><Skeleton className="h-5 w-5" /><Skeleton className="h-3 w-28" /><Skeleton className="h-8 w-20" /></div>)
+            : [["Schools", stats.data?.schools, Building2], ["Learners", stats.data?.students, Users], ["Attendance records", stats.data?.attendance, Activity], ["Marks recorded", stats.data?.marks, Check]].map(([label, value, Icon]) => {
             const Symbol = Icon as typeof Activity;
             return <div key={label as string} className="rounded-md border bg-card p-4"><Symbol className="mb-3 h-5 w-5 text-primary" /><p className="text-xs text-muted-foreground">{label as string}</p><p className="font-display text-2xl font-semibold">{typeof value === "number" ? value.toLocaleString() : "—"}</p></div>;
           })}
