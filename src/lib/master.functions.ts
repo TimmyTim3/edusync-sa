@@ -167,7 +167,10 @@ export const unlockMaster = createServerFn({ method: "POST" })
         page,
         perPage: 1000,
       });
-      if (listError) throw new Error("Could not verify the platform administrator account");
+      if (listError) {
+        console.error("[Master login] Supabase Auth admin.listUsers failed:", { name: listError.name, status: listError.status, message: listError.message });
+        throw new Error(`Supabase administrator lookup failed (${listError.status ?? "unknown"}): ${listError.message}`);
+      }
       adminUser = users.users.find(
         (user) => user.email?.toLowerCase() === PLATFORM_ADMIN_EMAIL,
       ) ?? null;
