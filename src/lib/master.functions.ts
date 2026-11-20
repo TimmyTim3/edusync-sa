@@ -138,13 +138,42 @@ export const seedHomeworkCompletions = createServerFn({ method: "POST" })
     return { added };
   });
 
-/** Verifies the master password server-side and makes sure the platform admin login accepts it. */
+/** Checks the Master Control passphrase and prepares the platform-admin Supabase login. */
 export const unlockMaster = createServerFn({ method: "POST" })
-  .inputValidator((input: { password: string }) => ({ password: String(input.password ?? "").slice(0, 200) }))
+  .inputValidator((input: { password: string }) => {
+    const password = String(input?.password ?? "");
+    if (!password || password.length > 200) throw new Error("Incorrect password");
+    return { password };
+  })
   .handler(async ({ data }) => {
-    if (data.password !== "Timmy_Tim3") throw new Error("Incorrect password");
+    // Keep the existing password working during transition. Move it to hosting secrets
+    // by setting MASTER_CONTROL_PASSWORD in Vercel/Lovable environment settings.
+    const expectedPassword = process.env["MASTER_CONTROL_PASSWORD"] || "Timmy_Tim3";
+    if (data.password !== expectedPassword) throw new Error("Incorrect password");
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.auth.admin.updateUserById("1d71dd07-be33-48b2-8798-12d0e0996173", { password: data.password, email_confirm: true });
-    if (error) throw new Error(error.message);
+    let adminUser: { id: string; email?: string } | null = null;
+
+    // Find the administrator by email instead of relying on a copied user UUID.
+    for (let page = 1; page <= 10 && !adminUser; page++) {
+      const { data: users, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage: 1000,
+      });
+      if (listError) throw new Error("Could not verify the platform administrator account");
+      adminUser = users.users.find(
+        (user) => user.email?.toLowerCase() === PLATFORM_ADMIN_EMAIL,
+      ) ?? null;
+      if (users.users.length < 1000) break;
+    }
+
+    if (!adminUser) throw new Error("Platform administrator account was not found");
+
+    // Supabase Auth performs the actual browser sign-in immediately afterwards.
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(adminUser.id, {
+      password: data.password,
+      email_confirm: true,
+    });
+    if (error) throw new Error("Could not prepare the platform administrator login");
     return { email: PLATFORM_ADMIN_EMAIL };
   });
