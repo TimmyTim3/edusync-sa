@@ -140,11 +140,23 @@ export const seedHomeworkCompletions = createServerFn({ method: "POST" })
 
 /** Verifies the master password server-side and makes sure the platform admin login accepts it. */
 export const unlockMaster = createServerFn({ method: "POST" })
-  .inputValidator((input: { password: string }) => ({ password: String(input.password ?? "").slice(0, 200) }))
-  .handler(async ({ data }) => {
-    if (data.password !== "Timmy_Tim3") throw new Error("Incorrect password");
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { password: string }) => {
+    const password = String(input?.password ?? "");
+    if (password.length < 12 || password.length > 200) {
+      throw new Error("Password must be between 12 and 200 characters");
+    }
+    return { password };
+  })
+  .handler(async ({ data, context }) => {
+    // This administrative password-reset helper must never be an unauthenticated backdoor.
+    // The caller must already be signed in as the configured platform administrator.
+    const email = assertPlatformAdmin(context.claims as Record<string, unknown>);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.auth.admin.updateUserById("1d71dd07-be33-48b2-8798-12d0e0996173", { password: data.password, email_confirm: true });
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(context.userId, {
+      password: data.password,
+      email_confirm: true,
+    });
     if (error) throw new Error(error.message);
-    return { email: PLATFORM_ADMIN_EMAIL };
+    return { email };
   });
